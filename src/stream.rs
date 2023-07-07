@@ -45,6 +45,16 @@ impl Stream {
 impl Display for Stream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", &self.head.borrow().post)?;
+        // Iterate over the remaining posts
+        if self.head.borrow().next.is_none() {
+            return writeln!(f, "\n{:^54}", "End of Stream");
+        };
+        let mut ptr = self.head.borrow().next.clone();
+        while ptr.is_some() {
+            let _post = Rc::clone(&ptr.clone().unwrap());
+            writeln!(f, "{}", &_post.borrow().post)?;
+            ptr = _post.borrow().next.clone();
+        }
         writeln!(f, "\n{:^54}", "End of Stream")
     }
 }

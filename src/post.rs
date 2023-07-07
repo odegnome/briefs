@@ -5,10 +5,15 @@ use std::{
 };
 use textwrap::wrap;
 
+/// A wrapper for Post object. Used to hold the actual post and pointers to the
+/// adjoining posts.
 #[derive(Debug, Clone)]
 pub struct StreamPost {
+    /// pointer to the post object stored in heap
     pub post: Box<Post>,
+    /// next here actually refers to the previous post
     pub next: Option<Rc<RefCell<StreamPost>>>,
+    /// prev here actually refers to the next post
     pub prev: Option<Rc<RefCell<StreamPost>>>,
 }
 
@@ -22,6 +27,7 @@ impl StreamPost {
     }
 }
 
+/// Post struct which is the heart of this project.
 #[derive(Debug, Clone)]
 pub struct Post {
     pub title: String,
