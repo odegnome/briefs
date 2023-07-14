@@ -1,44 +1,69 @@
-use std::{
-    cell::RefCell,
-    fmt::{Display, Formatter},
-    rc::Rc,
-};
+use crate::{StreamError, constant};
+use std::fmt::{Display, Formatter};
+use std::time::SystemTime;
 use textwrap::wrap;
-
-/// A wrapper for Post object. Used to hold the actual post and pointers to the
-/// adjoining posts.
-#[derive(Debug, Clone)]
-pub struct StreamPost {
-    /// pointer to the post object stored in heap
-    pub post: Box<Post>,
-    /// next here actually refers to the previous post
-    pub next: Option<Rc<RefCell<StreamPost>>>,
-    /// prev here actually refers to the next post
-    pub prev: Option<Rc<RefCell<StreamPost>>>,
-}
-
-impl StreamPost {
-    pub fn lone(post: Post) -> StreamPost {
-        StreamPost {
-            post: Box::new(post),
-            next: None,
-            prev: None,
-        }
-    }
-}
 
 /// Post struct which is the heart of this project.
 #[derive(Debug, Clone)]
 pub struct Post {
     pub title: String,
     pub msg: String,
-    pub date: String,
+    pub date: SystemTime,
 }
 
 impl Post {
-    pub fn new(title: String, msg: String, date: String) -> Self {
-        Post { title, msg, date }
+    /// Create a new post by providing the `title` and the body
+    /// of the message in `msg`.
+    pub fn new(title: String, msg: String) -> Result<Self, StreamError> {
+        verify_title(&title)?;
+        verify_msg(&msg)?;
+        Ok(Post {
+            title,
+            msg,
+            date: SystemTime::now(),
+        })
     }
+
+    pub fn update_msg(&mut self, new_msg: String) -> Result<(), StreamError> {
+        verify_msg(&new_msg)?;
+        self.msg = new_msg;
+        Ok(())
+    }
+
+    pub fn update_title(&mut self, new_title: String) -> Result<(), StreamError> {
+        verify_title(&new_title)?;
+        self.title = new_title;
+        Ok(())
+    }
+}
+
+/// Some necessary checks for post title.
+fn verify_title(title: &String) -> Result<(), StreamError> {
+    if title.is_empty() {
+        return Err(StreamError::EmptyTitle);
+    }
+    if title.len() > constant::MAX_TITLE_LEN {
+        return Err(StreamError::InvalidTitleLength {
+            max_size: MAX_TITLE_LEN,
+            curr_size: title.len(),
+        });
+    }
+    Ok(())
+}
+
+/// Some necessary checks for post message.
+fn verify_msg(msg: &String) -> Result<(), StreamError> {
+    // check min/max length of post
+    if msg.is_empty() {
+        return Err(StreamError::EmptyPost);
+    }
+    if msg.len() > constant::MAX_POST_LEN as usize {
+        return Err(StreamError::InvalidPostLength {
+            max_size: MAX_POST_LEN,
+            curr_size: msg.len(),
+        });
+    }
+    Ok(())
 }
 
 impl Display for Post {

@@ -1,60 +1,64 @@
-use crate::{
-    post::{Post, StreamPost},
-    StreamError,
-};
-use std::{cell::RefCell, fmt::Display, rc::Rc, time::SystemTime};
+use crate::{post::Post, StreamError};
+use std::{fmt::Display, time::SystemTime};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Stream {
-    head: Rc<RefCell<StreamPost>>,
+    posts: Vec<Post>,
     size: usize,
     last_updated: SystemTime,
 }
 
-impl Stream {
-    /// Creates a new Stream. This should practically only be used once.
-    pub fn new(post: Post) -> Self {
+impl Default for Stream {
+    fn default() -> Self {
         Stream {
-            head: Rc::new(RefCell::new(StreamPost::lone(post))),
+            posts: Vec::with_capacity(50),
             size: 1,
             last_updated: SystemTime::now(),
         }
     }
+}
 
-    /// Adds a new post to the current stream.
+impl Stream {
+    /// Adds a new post to the current stream
     pub fn add_post(&mut self, post: Post) -> Result<(), StreamError> {
-        let mut stream_post = StreamPost::lone(post);
-        stream_post.next = Some(Rc::clone(&self.head));
-        let new_head = Rc::new(RefCell::new(stream_post));
-        self.head.borrow_mut().prev = Some(Rc::clone(&new_head));
-        self.head = new_head;
-        self.size += 1;
-        self.last_updated = SystemTime::now();
+        self.posts.push(post);
         Ok(())
     }
 
+    /// Removes an existing post from the stream.
+    pub fn remove_post(&mut self, index: usize) -> Result<(), StreamError> {
+        let posts_count = self.posts.len();
+        if index > posts_count {
+            return Err(StreamError::InvalidIndex {
+                posts_count,
+                given_index: index,
+            });
+        };
+        self.posts.remove(posts_count - index);
+        Ok(())
+    }
+
+    /// Get the last time the stream was updated
     pub fn last_updated(&self) -> SystemTime {
         self.last_updated.clone()
     }
 
+    /// Get the number of posts in stream
     pub fn size(&self) -> usize {
-        self.size.clone()
+        self.size
+    }
+
+    pub fn increase_capacity(&mut self) {
+        if self.posts.capacity() >= 50 { return };
+        self.posts.reserve(50);
     }
 }
 
 impl Display for Stream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", &self.head.borrow().post)?;
-        // Iterate over the remaining posts
-        if self.head.borrow().next.is_none() {
-            return writeln!(f, "\n{:^54}", "End of Stream");
-        };
-        let mut ptr = self.head.borrow().next.clone();
-        while ptr.is_some() {
-            let _post = Rc::clone(&ptr.clone().unwrap());
-            writeln!(f, "{}", &_post.borrow().post)?;
-            ptr = _post.borrow().next.clone();
+        for _post in self.posts.iter() {
+            writeln!(f, "{}", _post)?;
         }
-        writeln!(f, "\n{:^54}", "End of Stream")
+        Ok(())
     }
 }
