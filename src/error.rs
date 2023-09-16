@@ -1,22 +1,30 @@
 use std::error::Error;
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+pub type CatchupResult<T> = Result<T, Box<dyn Error>>;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum StreamError {
+    // An empty title was provided for the post.
     EmptyTitle,
+    // An empty message was provided for the post.
     EmptyPost,
+    // The title length exceeds the maximum length.
     InvalidTitleLength {
         max_size: usize,
         curr_size: usize,
     },
+    // The post length exceeds the maximum length.
     InvalidPostLength {
         max_size: usize,
         curr_size: usize,
     },
+    // The requested/specified index is Out Of Bounds.
     InvalidIndex {
         posts_count: usize,
         given_index: usize,
     },
+    // Custom Error type for errors not covered by the above errors.
     CustomError {
         msg: String,
     },
