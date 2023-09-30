@@ -5,11 +5,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "client"
-path = "src/client.rs"
-
 [dependencies]
 textwrap = { version = "0.16.0" }
 serde = { version = "1.0.163", features = ["derive"] }
 tokio = { version = "1.29.1", features = ["full"] }
+serde_json = "1.0.107"

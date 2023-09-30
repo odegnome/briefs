@@ -59,7 +59,8 @@ impl Stream {
             return Err(StreamError::InvalidIndex {
                 posts_count,
                 given_index: *index,
-            }.into());
+            }
+            .into());
         }
         Ok(posts_count - index)
     }

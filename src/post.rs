@@ -1,9 +1,12 @@
+//! This module defines the `Post` struct which is the heart of CatchUP!
+
 use crate::{constant, CatchupResult, StreamError};
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
 use textwrap::wrap;
 
-/// Post struct which is the heart of this project.
+/// Every time a new post is created by the admin,
+/// this is the struct that stores all the necessary data.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Post {
     id: usize,
@@ -43,7 +46,6 @@ impl Post {
         self.edited = true;
         Ok(())
     }
-
 }
 
 /// Some necessary checks for post's title.
@@ -55,7 +57,8 @@ fn verify_title(title: &String) -> CatchupResult<()> {
         return Err(StreamError::InvalidTitleLength {
             max_size: constant::MAX_POST_TITLE as usize,
             curr_size: title.len(),
-        }.into());
+        }
+        .into());
     }
     Ok(())
 }
@@ -70,7 +73,8 @@ fn verify_msg(msg: &String) -> CatchupResult<()> {
         return Err(StreamError::InvalidPostLength {
             max_size: constant::MAX_POST_LEN as usize,
             curr_size: msg.len(),
-        }.into());
+        }
+        .into());
     }
     Ok(())
 }

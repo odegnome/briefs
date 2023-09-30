@@ -2,11 +2,29 @@ mod error;
 pub mod post;
 pub mod stream;
 
-pub use error::{StreamError, CatchupResult};
+pub use error::{CatchupResult, StreamError};
 
 pub mod constant {
     pub const MAX_POST_LEN: u16 = 300;
     pub const MAX_POST_TITLE: u16 = 100;
+}
+
+/// Used to send acknowledgements to the connection handler.
+pub type Responder<T> = tokio::sync::oneshot::Sender<T>;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum Command {
+    Catchup {},
+    Create { title: String, msg: String },
+    Read { index: usize },
+    Update,
+    Delete { index: usize },
+    Get,
+}
+
+pub struct StreamCommand {
+    pub cmd: Command,
+    pub resp: Option<Responder<String>>,
 }
 
 mod prelude {
@@ -15,7 +33,7 @@ mod prelude {
 
     use crate::CatchupResult;
 
-    pub trait Stream {
+    pub trait CatchupStream {
         fn add_post(&mut self, post: post::Post) -> CatchupResult<()>;
         fn remove_post(&mut self, id: usize) -> CatchupResult<()>;
         fn update_post_msg(&mut self, id: usize, new_msg: String) -> CatchupResult<()>;
@@ -24,7 +42,7 @@ mod prelude {
         fn date_of_inception(&self) -> SystemTime;
     }
 
-    pub trait Post {
+    pub trait CatchupPost {
         fn new<T>(id: usize, title: String, msg: String) -> CatchupResult<T>;
         fn update_msg(id: usize, msg: String) -> CatchupResult<()>;
         fn update_title(id: usize, title: String) -> CatchupResult<()>;
