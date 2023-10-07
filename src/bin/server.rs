@@ -2,13 +2,14 @@
 use catchup::{post, stream, Command, StreamCommand};
 use std::net::SocketAddr;
 use tokio::{
+    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
     sync::{mpsc, oneshot},
 };
 
 #[tokio::main]
 async fn main() {
-    let (tx, mut rx) = mpsc::channel(10);
+    let (tx, mut rx) = mpsc::channel(16);
 
     let stream_handle = tokio::spawn(async move {
         println!("Stream handle running...");
@@ -49,63 +50,9 @@ async fn main() {
     let conn_handle = tokio::spawn(async move {
         println!("Connection handle running...");
 
-        //// !-------SIMULATING REQUEST-------!
-
-        //let (responder, receiver) = oneshot::channel();
-        //let cmd = Command::Create {
-            //title: String::from("Hello, World!"),
-            //msg: String::from(
-                //"This is my first post, and as is the tradition, \
-                //the post is titled 'Hello, World!'. Hopefully, this works!",
-            //),
-        //};
-        //let wrapped_cmd = StreamCommand {
-            //cmd,
-            //resp: Some(responder),
-        //};
-        //tx.send(wrapped_cmd).await.unwrap();
-
-        //let res = receiver.await.unwrap();
-        //println!("CONN: {:?}", res);
-
-        //// !-------SIMULATING REQUEST-------!
-
-        //let (responder, receiver) = oneshot::channel();
-        //let cmd = Command::Create {
-            //title: String::from("Another Hello, World!"),
-            //msg: String::from(
-                //"Nothing new in this post. It is simply copied from the last \
-                //post. This is my first post, and as is the tradition, \
-                //the post is titled 'Hello, World!'. Hopefully, this works!",
-            //),
-        //};
-        //let wrapped_cmd = StreamCommand {
-            //cmd,
-            //resp: Some(responder),
-        //};
-        //tx.send(wrapped_cmd).await.unwrap();
-
-        //let res = receiver.await.unwrap();
-        //println!("CONN: {:?}", res);
-        //tokio::time::sleep(tokio::time::Duration::new(5, 0)).await;
-
-        //// !-------SIMULATING REQUEST-------!
-
-        //let (responder, receiver) = oneshot::channel();
-        //println!("-------CatchUP-------");
-        //let cmd = Command::Catchup {};
-        //let wrapped_cmd = StreamCommand {
-            //cmd,
-            //resp: Some(responder),
-        //};
-        //tx.send(wrapped_cmd).await.unwrap();
-
-        //let res = receiver.await.unwrap();
-        //println!("CONN:\n{}", res);
-
         // !------- ACCEPT CONNECTIONS ON PORT 8080 -------!
 
-        let listener = TcpListener::bind("localhost:8080").await.unwrap();
+        let listener = TcpListener::bind("192.168.1.16:8080").await.unwrap();
         println!("Listening on {}...", listener.local_addr().unwrap());
 
         loop {
@@ -122,7 +69,7 @@ async fn main() {
     stream_handle.await.unwrap();
 }
 
-async fn handle_request(conn: (TcpStream, SocketAddr), _tx: mpsc::Sender<StreamCommand>) {
+async fn handle_request(mut conn: (TcpStream, SocketAddr), tx: mpsc::Sender<StreamCommand>) {
     println!("Succesfully connected with {:?}", conn.1);
 
     conn.0.readable().await.unwrap();
@@ -134,7 +81,16 @@ async fn handle_request(conn: (TcpStream, SocketAddr), _tx: mpsc::Sender<StreamC
             println!("Read {bytes} bytes");
             let cmd = serde_json::from_slice::<Command>(&kb_buffer[..bytes]).unwrap();
             println!("{:?}", cmd);
-        },
-        Err(e) => eprintln!("Error on reading into buffer: {:?}", e),
+            let (responder, receiver) = oneshot::channel();
+            let wrapped_cmd = StreamCommand {
+                cmd,
+                resp: Some(responder),
+            };
+            tx.send(wrapped_cmd).await.unwrap();
+            let result = receiver.await.unwrap();
+            println!("CONN:\n{}", result);
+            conn.0.write(result.as_bytes()).await.unwrap();
+        }
+        Err(e) => eprintln!("Error reading into buffer: {:?}", e),
     }
 }

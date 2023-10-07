@@ -9,15 +9,7 @@ async fn main() {
     let mut stream = TcpStream::connect(server_addr).await.unwrap();
     println!("Connected with '{server_addr}'");
 
-    let request = Command::Create {
-        title: String::from("First Post"),
-        msg: String::from(
-            "My/Our first post. This is a demo post to test the proper \
-            functioning of my/our new stream. Follow to keep yourself updated \
-            with the latest updates.",
-        ),
-    };
-
+    let request = Command::Catchup {};
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap()[..])
         .await
