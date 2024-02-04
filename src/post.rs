@@ -46,6 +46,10 @@ impl Post {
         self.edited = true;
         Ok(())
     }
+
+    pub fn id(&self) -> CatchupResult<usize> {
+        Ok(self.id)
+    }
 }
 
 /// Some necessary checks for post's title.

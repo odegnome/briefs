@@ -1,5 +1,5 @@
 use crate::{post::Post, CatchupResult, StreamError};
-use std::{fmt::Display, time::SystemTime};
+use std::{fmt::Display, io::Write, time::SystemTime};
 
 /// A Stream struct contains all the posts and some metadata.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -26,6 +26,8 @@ impl Stream {
     pub fn add_post(&mut self, post: Post) -> CatchupResult<()> {
         self.increase_capacity()?;
         self.posts.push(post);
+        self.size += 1;
+        self.last_updated = SystemTime::now();
         Ok(())
     }
 
@@ -93,6 +95,25 @@ impl Display for Stream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for _post in self.posts.iter() {
             writeln!(f, "{}", _post)?;
+        }
+        Ok(())
+    }
+}
+
+impl Stream {
+    pub fn catchup(
+        &self,
+        start_index: usize,
+        mut end_index: usize,
+        f: &mut Vec<u8>,
+    ) -> std::io::Result<()> {
+        end_index = if self.size() < end_index {
+            self.size()
+        } else {
+            end_index
+        };
+        for idx in start_index..end_index {
+            writeln!(f, "{}", self.posts[idx])?;
         }
         Ok(())
     }

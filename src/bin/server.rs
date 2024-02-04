@@ -1,5 +1,9 @@
 #![allow(unused_imports)]
-use catchup::{post, stream, Command, StreamCommand};
+use catchup::{
+    post,
+    stream::{self, Stream},
+    Command, StreamCommand,
+};
 use std::net::SocketAddr;
 use tokio::{
     io::AsyncWriteExt,
@@ -7,25 +11,27 @@ use tokio::{
     sync::{mpsc, oneshot},
 };
 
+/// 10Kb buffer
+const BUFFER_SIZE: usize = 10240;
+
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(16);
 
     let stream_handle = tokio::spawn(async move {
         println!("Stream handle running...");
-        let mut post_count = 0usize;
-        let mut new_stream = stream::Stream::default();
+        let mut stream = stream::Stream::default();
         while let Some(StreamCommand { cmd, resp }) = rx.recv().await {
             match cmd {
                 Command::Create { title, msg } => {
-                    let post = post::Post::new(post_count + 1, title, msg);
+                    let post = post::Post::new(stream.size(), title, msg);
                     if post.is_err() {
                         resp.unwrap()
                             .send(format!("ERROR during create: {:?}", post.unwrap_err()))
                             .unwrap();
                         continue;
                     }
-                    let result = new_stream.add_post(post.unwrap());
+                    let result = stream.add_post(post.unwrap());
                     if result.is_err() {
                         resp.unwrap()
                             .send(format!("ERROR during create: {:?}", result.unwrap_err()))
@@ -35,11 +41,36 @@ async fn main() {
                     resp.unwrap()
                         .send(format!("Succesfully added a new post"))
                         .unwrap();
-                    post_count += 1;
                 }
 
-                Command::Catchup {} => {
-                    resp.unwrap().send(format!("{}", &new_stream)).unwrap();
+                Command::Catchup { last_fetch_id } => {
+                    if stream.size() == 0 {
+                        resp.unwrap().send(format!("No posts yet")).unwrap();
+                        continue;
+                    };
+                    if last_fetch_id >= stream.size() {
+                        resp.unwrap().send(format!("Caught up!")).unwrap();
+                        continue;
+                    }
+                    let uncaught_posts = stream.size() - 1 - last_fetch_id;
+                    let limit_index = if uncaught_posts > 10 {
+                        last_fetch_id + 11
+                    } else {
+                        stream.size()
+                    };
+                    let mut print_buffer = Vec::new();
+                    let result = stream.catchup(last_fetch_id, limit_index, &mut print_buffer);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("An error occured: {:?}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!("{}", String::from_utf8(print_buffer).unwrap()))
+                        .unwrap();
+
+                    //resp.unwrap().send(format!("{}", &stream)).unwrap();
                 }
 
                 _ => eprintln!("Feature not implemented"),
@@ -51,8 +82,7 @@ async fn main() {
         println!("Connection handle running...");
 
         // !------- ACCEPT CONNECTIONS ON PORT 8080 -------!
-
-        let listener = TcpListener::bind("192.168.1.16:8080").await.unwrap();
+        let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
         println!("Listening on {}...", listener.local_addr().unwrap());
 
         loop {
@@ -74,7 +104,7 @@ async fn handle_request(mut conn: (TcpStream, SocketAddr), tx: mpsc::Sender<Stre
 
     conn.0.readable().await.unwrap();
 
-    let mut kb_buffer = [0u8; 1024];
+    let mut kb_buffer = [0u8; BUFFER_SIZE];
 
     match conn.0.try_read(&mut kb_buffer) {
         Ok(bytes) => {

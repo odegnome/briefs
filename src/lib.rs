@@ -1,6 +1,7 @@
 mod error;
 pub mod post;
 pub mod stream;
+pub mod state;
 
 pub use error::{CatchupResult, StreamError};
 
@@ -14,12 +15,13 @@ pub type Responder<T> = tokio::sync::oneshot::Sender<T>;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Command {
-    Catchup {},
+    Catchup { last_fetch_id: usize },
     Create { title: String, msg: String },
     Read { index: usize },
     Update,
     Delete { index: usize },
     Get,
+    Subscribe {},
 }
 
 pub struct StreamCommand {

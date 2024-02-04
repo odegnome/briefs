@@ -1,47 +1,42 @@
 use catchup::{CatchupResult, Command};
 use clap::{Parser, Subcommand};
-use std::net::{IpAddr, SocketAddr};
-use std::path::PathBuf;
+use std::net::{Ipv4Addr, SocketAddr};
+use std::{net::IpAddr, path::PathBuf};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
+
+const BUFFER_SIZE: usize = 10240;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about=None)]
 struct Cli {
-    #[arg(short, long)]
-    /// Path to config file; defaults to ~/.local/catchup/config.toml
+    #[arg(short, long, value_name = "FILE")]
+    /// Path to config file; defaults to ~/.catchup/config.toml
     config: Option<PathBuf>,
-
-    #[arg(short, long)]
-    /// IP address of the catchup server
-    ip: Option<IpAddr>,
-    #[arg(short, long)]
-    /// PORT of the catchup server
-    port: Option<u16>,
 
     #[arg(short, long)]
     /// The socket address of the catchup server. For ex, localhost:8080
     socket_addr: Option<SocketAddr>,
 
     #[command(subcommand)]
-    command: Option<CliCommand>,
+    command: CliCommand,
 }
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum CliCommand {
-    /// Creates a new post with the given `title` and `body`
+    /// Creates a new post with the given `title` and `message`
     New {
         #[arg(short, long)]
         title: String,
         #[arg(short, long)]
-        body: String,
+        msg: String,
     },
 
     /// Catchup with the latest posts
-    Catchup {},
+    Catchup { idx: Option<usize> },
 }
 
-async fn new_post(mut stream: TcpStream, title: String, body: String) -> CatchupResult<()> {
-    let request = Command::Create { title, msg: body };
+async fn new_post(mut stream: TcpStream, title: String, msg: String) -> CatchupResult<()> {
+    let request = Command::Create { title, msg };
     stream.writable().await.unwrap();
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -49,7 +44,7 @@ async fn new_post(mut stream: TcpStream, title: String, body: String) -> Catchup
         .unwrap();
     println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; 1024];
+    let mut kb_buffer = [0u8; BUFFER_SIZE];
     stream.readable().await.unwrap();
     match stream.try_read(&mut kb_buffer) {
         Ok(bytes) => {
@@ -62,15 +57,17 @@ async fn new_post(mut stream: TcpStream, title: String, body: String) -> Catchup
     Ok(())
 }
 
-async fn catchup(mut stream: TcpStream) -> CatchupResult<()> {
-    let request = Command::Catchup {};
+async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<()> {
+    let request = Command::Catchup {
+        last_fetch_id: starting_index,
+    };
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
     println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; 1024];
+    let mut kb_buffer = [0u8; BUFFER_SIZE];
     stream.readable().await.unwrap();
     match stream.try_read(&mut kb_buffer) {
         Ok(bytes) => {
@@ -83,17 +80,36 @@ async fn catchup(mut stream: TcpStream) -> CatchupResult<()> {
     Ok(())
 }
 
+fn validate_socket(cli: &Cli) -> Result<SocketAddr, ()> {
+    if let Some(socket_addr) = cli.socket_addr {
+        return Ok(socket_addr);
+    } else {
+        return Ok(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8080));
+    }
+    //if let Some(config_file) = cli.config.to_owned() {
+    //let config_file_exists = config_file.exists();
+    //let is_file_path = config_file.is_file();
+
+    //if !is_file_path || !config_file_exists {
+    //eprintln!("Error: Path not for a file or doesn't exist");
+    //return Err(());
+    //}
+
+    //unimplemented!();
+    //}
+
+    //Err(())
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
 
-    let stream = TcpStream::connect(cli.socket_addr.unwrap()).await.unwrap();
+    let socket = validate_socket(&cli).unwrap();
+    let stream = TcpStream::connect(socket).await.unwrap();
 
-    if let Some(cmd) = cli.command {
-        println!("{:?}", cmd);
-        match cmd {
-            CliCommand::New { title, body } => new_post(stream, title, body).await.unwrap(),
-            CliCommand::Catchup {} => catchup(stream).await.unwrap(),
-        }
+    match cli.command {
+        CliCommand::New { title, msg } => new_post(stream, title, msg).await.unwrap(),
+        CliCommand::Catchup { idx } => catchup(stream, idx.unwrap_or_default()).await.unwrap(),
     }
 }
