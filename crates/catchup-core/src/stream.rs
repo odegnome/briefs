@@ -1,4 +1,4 @@
-use crate::{post::Post, CatchupResult, StreamError};
+use crate::{post::Post, CatchupResult, StreamError, state::CatchUpResponse};
 use std::{fmt::Display, io::Write, time::SystemTime};
 
 /// A Stream struct contains all the posts and some metadata.
@@ -107,14 +107,21 @@ impl Stream {
         mut end_index: usize,
         f: &mut Vec<u8>,
     ) -> std::io::Result<()> {
+        let mut caught_up = false;
         end_index = if self.size() < end_index {
+            caught_up = true;
             self.size()
         } else {
             end_index
         };
-        for idx in start_index..end_index {
-            writeln!(f, "{}", self.posts[idx])?;
-        }
+        //for idx in start_index..end_index {
+            //writeln!(f, "{}", self.posts[idx])?;
+        //}
+        let response = CatchUpResponse {
+            posts: self.posts[start_index..end_index].to_vec(),
+            caught_up
+        };
+        writeln!(f, "{}", serde_json::to_string(&response)?)?;
         Ok(())
     }
 }

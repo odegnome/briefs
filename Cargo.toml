@@ -1,15 +1,9 @@
-[package]
-name = "catchup"
-authors = ["Rishabh Goel"]
-version = "0.2.0"
-edition = "2021"
+[workspace]
+members = [
+    "crates/catchup-core", "crates/catchup-json", "crates/catchup-proto",
+]
+resolver = "2"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-textwrap = { version = "0.16.0", features = ["default"] }
-serde = { version = "1.0.163", features = ["derive"] }
-tokio = { version = "1.29.1", features = ["full"] }
-serde_json = "1.0.107"
-clap = { version = "4.4.6", features = ["derive"] }
-toml = { version = "0.8.2" }
+[workspace.package]
+authors = ["odeg"]
+description = "A pure rust app that enables anyone to create streams and post updates, which are viewed by the subscribers."

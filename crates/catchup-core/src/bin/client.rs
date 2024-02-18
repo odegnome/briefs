@@ -1,4 +1,4 @@
-use catchup::Command;
+use catchup_core::Command;
 use serde_json;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
@@ -24,7 +24,7 @@ async fn main() {
         .unwrap();
     println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; 1024];
+    let mut kb_buffer = [0u8; 10240];
     stream.readable().await.unwrap();
     match stream.try_read(&mut kb_buffer) {
         Ok(bytes) => {

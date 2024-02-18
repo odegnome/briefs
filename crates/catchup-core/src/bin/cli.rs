@@ -1,4 +1,4 @@
-use catchup::{CatchupResult, Command};
+use catchup_core::{CatchupResult, Command, state::CatchUpResponse};
 use clap::{Parser, Subcommand};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::{net::IpAddr, path::PathBuf};
@@ -73,7 +73,8 @@ async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).unwrap();
-            println!("{}", response);
+            let response = serde_json::from_str::<CatchUpResponse>(&response)?;
+            println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     }
