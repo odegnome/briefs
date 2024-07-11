@@ -1,7 +1,10 @@
+//! Welcome to documentation of CatchUp. Hopefully, you will find
+//! all that you need within these docs. However, if need be, join
+//! the discord(link in github) and post your question.
 mod error;
 pub mod post;
-pub mod stream;
 pub mod state;
+pub mod stream;
 
 pub use error::{CatchupResult, StreamError};
 
@@ -29,7 +32,7 @@ pub struct StreamCommand {
     pub resp: Option<Responder<String>>,
 }
 
-mod prelude {
+pub mod prelude {
     use crate::post;
     use std::time::SystemTime;
 
@@ -50,5 +53,11 @@ mod prelude {
         fn update_title(id: usize, title: String) -> CatchupResult<()>;
         fn verify_title(title: &String) -> CatchupResult<()>;
         fn verify_msg(msg: &String) -> CatchupResult<()>;
+    }
+
+    pub trait DataBase {
+        fn insert_post(&self, post: &post::Post);
+        fn delete_post(&self, post: &post::Post);
+        fn modify_post(&self, post: &post::Post);
     }
 }

@@ -1,4 +1,4 @@
-use catchup_core::{CatchupResult, Command, state::CatchUpResponse};
+use core::{CatchupResult, Command, state::CatchUpResponse};
 use clap::{Parser, Subcommand};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::{net::IpAddr, path::PathBuf};
