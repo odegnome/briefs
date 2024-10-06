@@ -1,5 +1,6 @@
-use core::{CatchupResult, Command, state::CatchUpResponse};
 use clap::{Parser, Subcommand};
+use core::StreamError;
+use core::{state::CatchUpResponse, CatchupResult, Command};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::{net::IpAddr, path::PathBuf};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
@@ -72,7 +73,11 @@ async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<
     match stream.try_read(&mut kb_buffer) {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).unwrap();
+            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+                StreamError::CustomError {
+                    msg: "Unable to decode UTF-8".into(),
+                }
+            })?;
             let response = serde_json::from_str::<CatchUpResponse>(&response)?;
             println!("{:#?}", response);
         }
@@ -111,6 +116,11 @@ async fn main() {
 
     match cli.command {
         CliCommand::New { title, msg } => new_post(stream, title, msg).await.unwrap(),
-        CliCommand::Catchup { idx } => catchup(stream, idx.unwrap_or_default()).await.unwrap(),
+        CliCommand::Catchup { idx } => {
+            let result = catchup(stream, idx.unwrap_or_default()).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
     }
 }

@@ -89,18 +89,7 @@ impl Stream {
         };
         Ok(self.posts.try_reserve(50)?)
     }
-}
 
-impl Display for Stream {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for _post in self.posts.iter() {
-            writeln!(f, "{}", _post)?;
-        }
-        Ok(())
-    }
-}
-
-impl Stream {
     pub fn catchup(
         &self,
         start_index: usize,
@@ -108,9 +97,9 @@ impl Stream {
         f: &mut Vec<u8>,
     ) -> std::io::Result<()> {
         let mut caught_up = false;
-        end_index = if self.size() < end_index {
+        end_index = if self.size() <= end_index {
             caught_up = true;
-            self.size()
+                self.size()
         } else {
             end_index
         };
@@ -122,6 +111,15 @@ impl Stream {
             caught_up
         };
         writeln!(f, "{}", serde_json::to_string(&response)?)?;
+        Ok(())
+    }
+}
+
+impl Display for Stream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for _post in self.posts.iter() {
+            writeln!(f, "{}", _post)?;
+        }
         Ok(())
     }
 }

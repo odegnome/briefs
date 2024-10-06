@@ -111,13 +111,13 @@ async fn handle_request(mut conn: (TcpStream, SocketAddr), tx: mpsc::Sender<Stre
             println!("Read {bytes} bytes");
             let cmd = serde_json::from_slice::<Command>(&kb_buffer[..bytes]).unwrap();
             println!("{:?}", cmd);
-            let (responder, receiver) = oneshot::channel();
+            let (responder, sender) = oneshot::channel();
             let wrapped_cmd = StreamCommand {
                 cmd,
                 resp: Some(responder),
             };
             tx.send(wrapped_cmd).await.unwrap();
-            let result = receiver.await.unwrap();
+            let result = sender.await.unwrap();
             println!("CONN:\n{}", result);
             conn.0.write(result.as_bytes()).await.unwrap();
         }

@@ -16,6 +16,7 @@ async fn main() {
         .unwrap();
     println!("Written {bytes} bytes");
 
+    // 10MB buffer
     let mut kb_buffer = [0u8; 10240];
     tcp_stream.readable().await.unwrap();
     match tcp_stream.try_read(&mut kb_buffer) {
