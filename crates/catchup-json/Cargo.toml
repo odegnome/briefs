@@ -9,4 +9,4 @@ description.workspace = true
 
 [dependencies]
 serde = { version = "1.0.196", features = ["derive"] }
-core = { path = "../core" }
+catchup-core = { path = "../catchup-core" }

@@ -1,4 +1,4 @@
-use core::Command;
+use catchup_core::Command;
 use serde_json;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;

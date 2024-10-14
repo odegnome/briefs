@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use core::{
+use catchup_core::{
     post,
     stream::{self, Stream},
     Command, StreamCommand,

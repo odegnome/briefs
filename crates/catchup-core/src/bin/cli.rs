@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
-use core::StreamError;
-use core::{state::CatchUpResponse, CatchupResult, Command};
+use catchup_core::StreamError;
+use catchup_core::{state::CatchUpResponse, CatchupResult, Command};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::{net::IpAddr, path::PathBuf};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
