@@ -1,4 +1,4 @@
-use crate::{post::Post, CatchupResult, StreamError, state::CatchUpResponse};
+use crate::{post::Post, state::CatchUpResponse, CatchupResult, StreamError};
 use std::{fmt::Display, io::Write, time::SystemTime};
 
 /// A Stream struct contains all the posts and some metadata.
@@ -22,6 +22,10 @@ impl Default for Stream {
 }
 
 impl Stream {
+    // ***
+    // Command handlers
+    // ***
+
     /// Adds a new post to the current stream.
     pub fn add_post(&mut self, post: Post) -> CatchupResult<()> {
         self.increase_capacity()?;
@@ -32,25 +36,82 @@ impl Stream {
     }
 
     /// Removes an existing post from the stream.
-    pub fn remove_post(&mut self, index: usize) -> CatchupResult<()> {
-        let post_index = self.get_post_index(&index)?;
-        self.posts.remove(post_index);
+    pub fn remove_post(&mut self, id: usize) -> CatchupResult<()> {
+        let mut start = 0;
+        let mut end = self.posts.len();
+        let mut mid = (end + start) / 2;
+        let mut post_id = self
+            .posts
+            .get(mid)
+            .ok_or_else(|| StreamError::InvalidId {})?
+            .id()?;
+
+        while post_id != id {
+            if id < post_id {
+                end = mid - 1;
+            } else if id > post_id {
+                start = mid + 1;
+            } else {
+                break;
+            }
+            mid = (end + start) / 2;
+            post_id = self
+                .posts
+                .get(mid)
+                .ok_or_else(|| StreamError::InvalidId {})?
+                .id()?;
+        }
+
+        self.posts.remove(mid);
         Ok(())
     }
 
     /// Update an existing post with the new message.
-    pub fn update_msg(&mut self, index: usize, new_msg: String) -> CatchupResult<()> {
-        let post_index = self.get_post_index(&index)?;
-        let post = self.posts.get_mut(post_index).unwrap();
-        Ok(post.update_msg(new_msg)?)
+    pub fn update_msg(&mut self, id: usize, new_msg: String) -> CatchupResult<()> {
+        let post = self
+            .posts
+            .get_mut(id)
+            .ok_or_else(|| StreamError::InvalidId {})?;
+        post.update_msg(new_msg)
     }
 
     /// Update an existing post with the new title.
     pub fn update_title(&mut self, id: usize, new_title: String) -> CatchupResult<()> {
-        let post_index = self.get_post_index(&id)?;
-        let post = self.posts.get_mut(post_index).unwrap();
-        Ok(post.update_title(new_title)?)
+        let post = self
+            .posts
+            .get_mut(id)
+            .ok_or_else(|| StreamError::InvalidId {})?;
+        post.update_title(new_title)
     }
+
+    /// Return the latest posts.
+    pub fn catchup(
+        &self,
+        start_index: usize,
+        mut end_index: usize,
+        f: &mut Vec<u8>,
+    ) -> std::io::Result<()> {
+        let mut caught_up = false;
+        end_index = if self.size() <= end_index {
+            caught_up = true;
+            self.size()
+        } else {
+            end_index
+        };
+        //for idx in start_index..end_index {
+        //writeln!(f, "{}", self.posts[idx])?;
+        //}
+        let response = CatchUpResponse {
+            posts: self.posts[start_index..end_index].to_vec(),
+            caught_up,
+        };
+        writeln!(f, "{}", serde_json::to_string(&response)?)?;
+        Ok(())
+    }
+
+    // ***
+    // Helpers
+    // ***
 
     /// Get the index of a post in `posts`. The argument specifies
     /// the index of the post from the last post. This return the index from
@@ -88,30 +149,6 @@ impl Stream {
             return Ok(());
         };
         Ok(self.posts.try_reserve(50)?)
-    }
-
-    pub fn catchup(
-        &self,
-        start_index: usize,
-        mut end_index: usize,
-        f: &mut Vec<u8>,
-    ) -> std::io::Result<()> {
-        let mut caught_up = false;
-        end_index = if self.size() <= end_index {
-            caught_up = true;
-                self.size()
-        } else {
-            end_index
-        };
-        //for idx in start_index..end_index {
-            //writeln!(f, "{}", self.posts[idx])?;
-        //}
-        let response = CatchUpResponse {
-            posts: self.posts[start_index..end_index].to_vec(),
-            caught_up
-        };
-        writeln!(f, "{}", serde_json::to_string(&response)?)?;
-        Ok(())
     }
 }
 
