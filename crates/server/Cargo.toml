@@ -13,3 +13,6 @@ serde = { version = "1.0.163" }
 anyhow = "1.0.89"
 thiserror = "1.0.64"
 sqlite = "0.36.1"
+clap = { version = "4.4.6", features = ["derive"] }
+rand = "0.8.5"
+
