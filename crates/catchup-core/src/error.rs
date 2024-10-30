@@ -61,6 +61,7 @@ impl Display for StreamError {
                 "The index({given_index}) is greater than posts count({posts_count})"
             ),
             StreamError::CustomError { msg } => writeln!(f, "{:?}", msg),
+            StreamError::InvalidId { } => writeln!(f, "Post does not exist with the given ID" ),
         }
     }
 }
