@@ -8,7 +8,7 @@ other applications.
 
 This is developed using [Rust](https://www.rust-lang.org/) and uses [sqlite](https://www.sqlite.org/) in the backend.
 
-## Issues
+## Issues (Bug Tracker)
 
 In order to report any bugs, please open a new issue [here](https://github.com/Coder-RG/catchup/issues).
 
