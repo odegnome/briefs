@@ -20,11 +20,10 @@ pub type Responder<T> = tokio::sync::oneshot::Sender<T>;
 pub enum Command {
     Catchup { last_fetch_id: usize },
     Create { title: String, msg: String },
-    Read { index: usize },
-    Update,
-    Delete { index: usize },
-    Get,
-    Subscribe {},
+    UpdateMsg { id: usize, msg: String },
+    UpdateTitle { id: usize, title: String },
+    Delete { id: usize },
+    Get { id: usize },
 }
 
 pub struct StreamCommand {
