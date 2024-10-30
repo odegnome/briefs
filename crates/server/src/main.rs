@@ -1,32 +1,55 @@
 use catchup_core::{post, stream, Command, StreamCommand};
-use tokio::{net::TcpListener, sync::mpsc};
+use tokio::{net::TcpListener, sync::mpsc, signal::ctrl_c};
 
-use server::handle_conn_request;
+use server::{database, generate_temp_db, handle_conn_request, setup_server, POSTS_TABLE};
 
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(16);
 
+    let db_path_outer = generate_temp_db();
+    let db_path = db_path_outer.to_owned();
     let stream_handle = tokio::spawn(async move {
+        //-------
+        // Setups
+        //-------
         println!("Stream handle running...");
         let mut stream = stream::Stream::default();
+        setup_server(Some(db_path.clone().into())).expect("Unable to setup db");
+        let mut conn = sqlite::open(db_path).expect("Unable to open connection");
+        database::setup_tables(&mut conn).expect("Unable to setup tables");
+
+        //-------
+        // Handle requets from conn handler
+        //-------
         while let Some(StreamCommand { cmd, resp }) = rx.recv().await {
             match cmd {
                 Command::Create { title, msg } => {
-                    let post = post::Post::new(stream.size(), title, msg);
-                    if post.is_err() {
+                    let new_post = post::Post::new(stream.size(), title, msg);
+                    if new_post.is_err() {
                         resp.unwrap()
-                            .send(format!("ERROR during create: {:?}", post.unwrap_err()))
+                            .send(format!("ERROR during create: {:?}", new_post.unwrap_err()))
                             .unwrap();
                         continue;
                     }
-                    let result = stream.add_post(post.unwrap());
+                    let new_post = new_post.unwrap();
+                    let result = stream.add_post(new_post.clone());
                     if result.is_err() {
                         resp.unwrap()
                             .send(format!("ERROR during create: {:?}", result.unwrap_err()))
                             .unwrap();
                         continue;
                     }
+
+                    // Insert into db
+                    let result = database::insert_post(&mut conn, POSTS_TABLE, &new_post);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("ERROR during create: {:?}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+
                     resp.unwrap()
                         .send(format!("Succesfully added a new post"))
                         .unwrap();
@@ -55,6 +78,19 @@ async fn main() {
                             .unwrap();
                         continue;
                     }
+
+                    let result = database::query_posts(&mut conn, "posts", None);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("An error occured: {:?}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    let rows = result.unwrap();
+                    for row in rows.iter() {
+                        println!("{:?}", row);
+                    }
+
                     resp.unwrap()
                         .send(format!("{}", String::from_utf8(print_buffer).unwrap()))
                         .unwrap();
@@ -84,6 +120,18 @@ async fn main() {
             }
         }
     });
+
+    let safe_exit_handle = tokio::spawn(async move {
+        ctrl_c().await.unwrap();
+        println!("\nCtrl-C event 1");
+        std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
+        std::process::exit(0);
+    });
+
+    //-------
+    // Wait for both threads
+    //------- 
     conn_handle.await.unwrap();
     stream_handle.await.unwrap();
+    safe_exit_handle.await.unwrap();
 }
