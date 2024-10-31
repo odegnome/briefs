@@ -140,7 +140,19 @@ async fn main() {
                         .unwrap();
                 }
 
-                _ => eprintln!("Feature not implemented"),
+                Command::UpdateTitle { id, title } => {
+                    let result = stream.update_title(id, title);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("ERROR during title update: {}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!("Succesfully updated post title",))
+                        .unwrap();
+                }
+
             }
         }
     });

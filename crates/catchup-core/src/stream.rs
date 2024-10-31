@@ -55,9 +55,10 @@ impl Stream {
 
     /// Update an existing post with the new title.
     pub fn update_title(&mut self, id: usize, new_title: String) -> CatchupResult<()> {
+        let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
-            .get_mut(id)
+            .get_mut(post_id)
             .ok_or_else(|| StreamError::InvalidId {})?;
         post.update_title(new_title)
     }
