@@ -114,6 +114,19 @@ async fn main() {
                         .unwrap();
                 }
 
+                Command::Delete { id } => {
+                    let result = stream.remove_post(id);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("{}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!("Succesfully removed post",))
+                        .unwrap();
+                }
+
                 _ => eprintln!("Feature not implemented"),
             }
         }
