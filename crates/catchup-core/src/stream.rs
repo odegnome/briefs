@@ -37,31 +37,7 @@ impl Stream {
 
     /// Removes an existing post from the stream.
     pub fn remove_post(&mut self, id: usize) -> CatchupResult<()> {
-        let mut start = 0;
-        let mut end = self.posts.len();
-        let mut mid = (end + start) / 2;
-        let mut post_id = self
-            .posts
-            .get(mid)
-            .ok_or_else(|| StreamError::InvalidId {})?
-            .id()?;
-
-        while post_id != id {
-            if id < post_id {
-                end = mid - 1;
-            } else if id > post_id {
-                start = mid + 1;
-            } else {
-                break;
-            }
-            mid = (end + start) / 2;
-            post_id = self
-                .posts
-                .get(mid)
-                .ok_or_else(|| StreamError::InvalidId {})?
-                .id()?;
-        }
-
+        let mid = self.post_id_to_idx(id)?;
         self.posts.remove(mid);
         Ok(())
     }
@@ -149,6 +125,45 @@ impl Stream {
             return Ok(());
         };
         Ok(self.posts.try_reserve(50)?)
+    }
+
+    pub fn post_id_to_idx(&self, id: usize) -> CatchupResult<usize> {
+        let mut start = 0;
+        let mut end = self.posts.len();
+        let mut mid = (end + start) / 2;
+        let mut post_id = self
+            .posts
+            .get(mid)
+            .ok_or_else(|| StreamError::InvalidId {})?
+            .id()?;
+
+        while start <= end {
+            if id < post_id {
+                end = mid - 1;
+            } else if id > post_id {
+                start = mid + 1;
+            } else {
+                break;
+            }
+            mid = (end + start) / 2;
+            post_id = self
+                .posts
+                .get(mid)
+                .ok_or_else(|| StreamError::InvalidId {})?
+                .id()?;
+        }
+
+        if self
+            .posts
+            .get(mid)
+            .ok_or_else(|| StreamError::InvalidId {})?
+            .id()?
+            != id
+        {
+            return Err(StreamError::InvalidId {}.into());
+        }
+
+        Ok(mid)
     }
 }
 
