@@ -85,6 +85,14 @@ impl Stream {
         Ok(())
     }
 
+    pub fn get_post(&self, id: usize) -> Option<&Post> {
+        let result = self.post_id_to_idx(id);
+        match result {
+            Ok(post_idx) => self.posts.get(post_idx),
+            Err(_) => None,
+        }
+    }
+
     // ***
     // Helpers
     // ***
