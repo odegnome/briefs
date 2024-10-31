@@ -100,6 +100,7 @@ impl Stream {
     /// Get the index of a post in `posts`. The argument specifies
     /// the index of the post from the last post. This return the index from
     /// the start.
+    #[allow(dead_code)]
     fn get_post_index(&self, index: &usize) -> CatchupResult<usize> {
         let posts_count = self.posts.len();
         if *index > posts_count {
