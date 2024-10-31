@@ -118,12 +118,25 @@ async fn main() {
                     let result = stream.remove_post(id);
                     if result.is_err() {
                         resp.unwrap()
-                            .send(format!("{}", result.unwrap_err()))
+                            .send(format!("ERROR during delete: {}", result.unwrap_err()))
                             .unwrap();
                         continue;
                     }
                     resp.unwrap()
                         .send(format!("Succesfully removed post",))
+                        .unwrap();
+                }
+
+                Command::UpdateMsg { id, msg } => {
+                    let result = stream.update_msg(id, msg);
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("ERROR during message update: {}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!("Succesfully updated post message",))
                         .unwrap();
                 }
 
