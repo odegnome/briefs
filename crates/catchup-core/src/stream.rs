@@ -39,6 +39,7 @@ impl Stream {
     pub fn remove_post(&mut self, id: usize) -> CatchupResult<()> {
         let mid = self.post_id_to_idx(id)?;
         self.posts.remove(mid);
+        self.size = self.posts.len();
         Ok(())
     }
 
