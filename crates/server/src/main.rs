@@ -1,5 +1,5 @@
 use catchup_core::{post, stream, Command, StreamCommand};
-use tokio::{net::TcpListener, sync::mpsc, signal::ctrl_c};
+use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 
 use server::{database, generate_temp_db, handle_conn_request, setup_server, POSTS_TABLE};
 
@@ -98,6 +98,22 @@ async fn main() {
                     //resp.unwrap().send(format!("{}", &stream)).unwrap();
                 }
 
+                Command::Get { id } => {
+                    let result = stream.get_post(id);
+                    if result.is_none() {
+                        resp.unwrap()
+                            .send(format!("ERROR during get: Unable to get post"))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!(
+                            "{}",
+                            serde_json::to_string(&result.unwrap()).unwrap_or_default()
+                        ))
+                        .unwrap();
+                }
+
                 _ => eprintln!("Feature not implemented"),
             }
         }
@@ -130,7 +146,7 @@ async fn main() {
 
     //-------
     // Wait for both threads
-    //------- 
+    //-------
     conn_handle.await.unwrap();
     stream_handle.await.unwrap();
     safe_exit_handle.await.unwrap();
