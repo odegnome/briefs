@@ -43,6 +43,11 @@ pub enum CliCommand {
 
     DeletePost {
         id: usize,
+    },
+
+    UpdateMsg {
+        id: usize,
+        msg: String,
     }
 }
 
@@ -147,6 +152,31 @@ async fn remove_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
     Ok(())
 }
 
+async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> CatchupResult<()> {
+    let request = Command::UpdateMsg { id, msg };
+    let bytes = stream
+        .write(&serde_json::to_vec(&request).unwrap().as_slice())
+        .await
+        .unwrap();
+    println!("Written {bytes} bytes");
+
+    let mut kb_buffer = [0u8; BUFFER_SIZE];
+    stream.readable().await.unwrap();
+    match stream.try_read(&mut kb_buffer) {
+        Ok(bytes) => {
+            println!("Read {bytes} bytes");
+            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+                StreamError::CustomError {
+                    msg: "Unable to decode UTF-8".into(),
+                }
+            })?;
+            println!("{:?}", response);
+        }
+        Err(e) => eprintln!("Error reading from stream: {:?}", e),
+    }
+    Ok(())
+}
+
 fn validate_socket(cli: &Cli) -> Result<SocketAddr, ()> {
     if let Some(socket_addr) = cli.socket_addr {
         return Ok(socket_addr);
@@ -191,6 +221,12 @@ async fn main() {
         }
         CliCommand::DeletePost { id } => {
             let result = remove_post(stream, id).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        CliCommand::UpdateMsg { id, msg } => {
+            let result = update_msg(stream, id, msg).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
