@@ -25,7 +25,7 @@ struct Cli {
 #[derive(Subcommand, Clone, Debug)]
 pub enum CliCommand {
     /// Creates a new post with the given `title` and `message`
-    New {
+    NewPost {
         #[arg(short, long)]
         title: String,
         #[arg(short, long)]
@@ -236,7 +236,7 @@ async fn main() {
     let stream = TcpStream::connect(socket).await.unwrap();
 
     match cli.command {
-        CliCommand::New { title, msg } => new_post(stream, title, msg).await.unwrap(),
+        CliCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
         CliCommand::Catchup { idx } => {
             let result = catchup(stream, idx.unwrap_or_default()).await;
             if result.is_err() {

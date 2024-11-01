@@ -14,3 +14,11 @@ pub struct CatchUpResponse {
 pub struct Catchup {
     pub last_id: usize,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "snake_case")]
+pub struct StreamMetadata {
+    pub latest_post_id: Option<usize>,
+    pub last_updated: u64,
+    pub posts_count: usize,
+}

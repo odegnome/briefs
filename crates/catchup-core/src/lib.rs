@@ -24,6 +24,7 @@ pub enum Command {
     UpdateTitle { id: usize, title: String },
     Delete { id: usize },
     Get { id: usize },
+    Metadata { },
 }
 
 pub struct StreamCommand {

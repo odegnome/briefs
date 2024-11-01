@@ -1,6 +1,8 @@
 use catchup_core::{post, stream, Command, StreamCommand};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 
+use std::io::Write;
+
 use server::{database, generate_temp_db, handle_conn_request, setup_server, POSTS_TABLE};
 
 #[tokio::main]
@@ -70,8 +72,30 @@ async fn main() {
                     } else {
                         stream.size()
                     };
+
+                    // Catchup
+                    let response = stream.catchup(last_fetch_id, limit_index);
+                    if response.is_err() {
+                        resp.unwrap()
+                            .send(format!("An error occured: {:?}", response.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+
+                    // Serialise the response
                     let mut print_buffer = Vec::new();
-                    let result = stream.catchup(last_fetch_id, limit_index, &mut print_buffer);
+                    let result = serde_json::to_string(&response.unwrap());
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!("An error occured: {:?}", result.unwrap_err()))
+                            .unwrap();
+                        continue;
+                    }
+                    let result = writeln!(
+                        print_buffer,
+                        "{}",
+                        result.unwrap()
+                    );
                     if result.is_err() {
                         resp.unwrap()
                             .send(format!("An error occured: {:?}", result.unwrap_err()))
@@ -79,6 +103,7 @@ async fn main() {
                         continue;
                     }
 
+                    // Update database
                     let result = database::query_posts(&mut conn, "posts", None);
                     if result.is_err() {
                         resp.unwrap()
@@ -131,7 +156,10 @@ async fn main() {
                     let result = stream.update_msg(id, msg);
                     if result.is_err() {
                         resp.unwrap()
-                            .send(format!("ERROR during message update: {}", result.unwrap_err()))
+                            .send(format!(
+                                "ERROR during message update: {}",
+                                result.unwrap_err()
+                            ))
                             .unwrap();
                         continue;
                     }
@@ -144,7 +172,10 @@ async fn main() {
                     let result = stream.update_title(id, title);
                     if result.is_err() {
                         resp.unwrap()
-                            .send(format!("ERROR during title update: {}", result.unwrap_err()))
+                            .send(format!(
+                                "ERROR during title update: {}",
+                                result.unwrap_err()
+                            ))
                             .unwrap();
                         continue;
                     }
@@ -153,6 +184,21 @@ async fn main() {
                         .unwrap();
                 }
 
+                Command::Metadata {} => {
+                    let result = stream.stream_metadata();
+                    if result.is_err() {
+                        resp.unwrap()
+                            .send(format!(
+                                "ERROR during title update: {}",
+                                result.unwrap_err()
+                            ))
+                            .unwrap();
+                        continue;
+                    }
+                    resp.unwrap()
+                        .send(format!("Succesfully updated post title",))
+                        .unwrap();
+                }
             }
         }
     });
@@ -182,8 +228,10 @@ async fn main() {
         std::process::exit(0);
     });
 
+    println!("Press Ctrl-C to stop the server; this also deletes the test db");
+
     //-------
-    // Wait for both threads
+    // Wait for all threads
     //-------
     conn_handle.await.unwrap();
     stream_handle.await.unwrap();

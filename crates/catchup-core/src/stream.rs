@@ -1,13 +1,24 @@
-use crate::{post::Post, state::CatchUpResponse, CatchupResult, StreamError};
-use std::{fmt::Display, io::Write, time::SystemTime};
+use crate::{
+    post::Post,
+    state::{CatchUpResponse, StreamMetadata},
+    CatchupResult, StreamError,
+};
+use std::{
+    fmt::Display,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-/// A Stream struct contains all the posts and some metadata.
+/// A Stream contains all the posts and some metadata.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Stream {
     posts: Vec<Post>,
     size: usize,
     last_updated: SystemTime,
     date_of_inception: SystemTime,
+}
+
+fn systime_to_u64(time: &SystemTime) -> CatchupResult<u64> {
+    Ok(time.duration_since(UNIX_EPOCH)?.as_secs())
 }
 
 impl Default for Stream {
@@ -40,6 +51,7 @@ impl Stream {
         let mid = self.post_id_to_idx(id)?;
         self.posts.remove(mid);
         self.size = self.posts.len();
+        self.last_updated = SystemTime::now();
         Ok(())
     }
 
@@ -50,6 +62,7 @@ impl Stream {
             .posts
             .get_mut(post_id)
             .ok_or_else(|| StreamError::InvalidId {})?;
+        self.last_updated = SystemTime::now();
         post.update_msg(new_msg)
     }
 
@@ -60,6 +73,7 @@ impl Stream {
             .posts
             .get_mut(post_id)
             .ok_or_else(|| StreamError::InvalidId {})?;
+        self.last_updated = SystemTime::now();
         post.update_title(new_title)
     }
 
@@ -68,8 +82,7 @@ impl Stream {
         &self,
         start_index: usize,
         mut end_index: usize,
-        f: &mut Vec<u8>,
-    ) -> std::io::Result<()> {
+    ) -> CatchupResult<CatchUpResponse> {
         let mut caught_up = false;
         end_index = if self.size() <= end_index {
             caught_up = true;
@@ -84,16 +97,24 @@ impl Stream {
             posts: self.posts[start_index..end_index].to_vec(),
             caught_up,
         };
-        writeln!(f, "{}", serde_json::to_string(&response)?)?;
-        Ok(())
+        Ok(response)
     }
 
+    /// Return a specifi post.
     pub fn get_post(&self, id: usize) -> Option<&Post> {
         let result = self.post_id_to_idx(id);
         match result {
             Ok(post_idx) => self.posts.get(post_idx),
             Err(_) => None,
         }
+    }
+
+    pub fn stream_metadata(&self) -> CatchupResult<StreamMetadata> {
+        Ok(StreamMetadata {
+            posts_count: self.size(),
+            last_updated: systime_to_u64(&self.last_updated)?,
+            latest_post_id: self.posts.last().map(|val| val.id().unwrap()),
+        })
     }
 
     // ***
@@ -139,7 +160,8 @@ impl Stream {
         Ok(self.posts.try_reserve(50)?)
     }
 
-    pub fn post_id_to_idx(&self, id: usize) -> CatchupResult<usize> {
+    /// Returns the index of post, with the associated ID, in the posts vector.
+    fn post_id_to_idx(&self, id: usize) -> CatchupResult<usize> {
         let mut start = 0;
         let mut end = self.posts.len();
         let mut mid = (end + start) / 2;
