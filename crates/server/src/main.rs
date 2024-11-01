@@ -1,8 +1,6 @@
 use catchup_core::{post, stream, Command, StreamCommand};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 
-use std::io::Write;
-
 use server::{database, generate_temp_db, handle_conn_request, setup_server, POSTS_TABLE};
 
 #[tokio::main]
@@ -83,22 +81,10 @@ async fn main() {
                     }
 
                     // Serialise the response
-                    let mut print_buffer = Vec::new();
-                    let result = serde_json::to_string(&response.unwrap());
-                    if result.is_err() {
+                    let response = serde_json::to_string(&response.unwrap());
+                    if response.is_err() {
                         resp.unwrap()
-                            .send(format!("An error occured: {:?}", result.unwrap_err()))
-                            .unwrap();
-                        continue;
-                    }
-                    let result = writeln!(
-                        print_buffer,
-                        "{}",
-                        result.unwrap()
-                    );
-                    if result.is_err() {
-                        resp.unwrap()
-                            .send(format!("An error occured: {:?}", result.unwrap_err()))
+                            .send(format!("An error occured: {:?}", response.unwrap_err()))
                             .unwrap();
                         continue;
                     }
@@ -116,9 +102,7 @@ async fn main() {
                         println!("{:?}", row);
                     }
 
-                    resp.unwrap()
-                        .send(format!("{}", String::from_utf8(print_buffer).unwrap()))
-                        .unwrap();
+                    resp.unwrap().send(response.unwrap()).unwrap();
 
                     //resp.unwrap().send(format!("{}", &stream)).unwrap();
                 }
@@ -196,7 +180,10 @@ async fn main() {
                         continue;
                     }
                     resp.unwrap()
-                        .send(format!("Succesfully updated post title",))
+                        .send(format!(
+                            "{}",
+                            serde_json::to_string(&result.unwrap()).unwrap()
+                        ))
                         .unwrap();
                 }
             }
@@ -223,7 +210,7 @@ async fn main() {
 
     let safe_exit_handle = tokio::spawn(async move {
         ctrl_c().await.unwrap();
-        println!("\nCtrl-C event 1");
+        println!("\nCtrl-C");
         std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
         std::process::exit(0);
     });

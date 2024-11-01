@@ -54,6 +54,8 @@ pub enum CliCommand {
         id: usize,
         title: String,
     },
+
+    StreamMetadata {},
 }
 
 async fn new_post(mut stream: TcpStream, title: String, msg: String) -> CatchupResult<()> {
@@ -207,6 +209,32 @@ async fn update_title(mut stream: TcpStream, id: usize, title: String) -> Catchu
     Ok(())
 }
 
+async fn stream_metadata(mut stream: TcpStream) -> CatchupResult<()> {
+    let request = Command::Metadata {};
+    let bytes = stream
+        .write(&serde_json::to_vec(&request).unwrap().as_slice())
+        .await
+        .unwrap();
+    println!("Written {bytes} bytes");
+
+    let mut kb_buffer = [0u8; BUFFER_SIZE];
+    stream.readable().await.unwrap();
+    match stream.try_read(&mut kb_buffer) {
+        Ok(bytes) => {
+            println!("Read {bytes} bytes");
+            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+                StreamError::CustomError {
+                    msg: "Unable to decode UTF-8".into(),
+                }
+            })?;
+            let response = serde_json::from_str::<catchup_core::state::StreamMetadata>(&response)?;
+            println!("{:#?}", response);
+        }
+        Err(e) => eprintln!("Error reading from stream: {:?}", e),
+    }
+    Ok(())
+}
+
 fn validate_socket(cli: &Cli) -> Result<SocketAddr, ()> {
     if let Some(socket_addr) = cli.socket_addr {
         return Ok(socket_addr);
@@ -263,6 +291,12 @@ async fn main() {
         }
         CliCommand::UpdateTitle { id, title } => {
             let result = update_title(stream, id, title).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        CliCommand::StreamMetadata {} => {
+            let result = stream_metadata(stream).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
