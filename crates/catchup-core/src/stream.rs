@@ -1,17 +1,19 @@
 use crate::{
+    constant::STREAM_CACHE_SIZE,
     post::Post,
     state::{CatchUpResponse, StreamMetadata},
     CatchupResult, StreamError,
 };
 use std::{
+    collections::VecDeque,
     fmt::Display,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 /// A Stream contains all the posts and some metadata.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug)]
 pub struct Stream {
-    posts: Vec<Post>,
+    posts: VecDeque<Post>,
     size: usize,
     last_updated: SystemTime,
     date_of_inception: SystemTime,
@@ -24,7 +26,7 @@ fn systime_to_u64(time: &SystemTime) -> CatchupResult<u64> {
 impl Default for Stream {
     fn default() -> Self {
         Stream {
-            posts: Vec::with_capacity(50),
+            posts: VecDeque::with_capacity(STREAM_CACHE_SIZE.into()),
             size: 0,
             date_of_inception: SystemTime::now(),
             last_updated: SystemTime::now(),
@@ -40,7 +42,11 @@ impl Stream {
     /// Adds a new post to the current stream.
     pub fn add_post(&mut self, post: Post) -> CatchupResult<()> {
         self.increase_capacity()?;
-        self.posts.push(post);
+        if self.posts.len() == STREAM_CACHE_SIZE.into() {
+            self.posts.pop_front();
+            self.size -= 1;
+        }
+        self.posts.push_back(post);
         self.size += 1;
         self.last_updated = SystemTime::now();
         Ok(())
@@ -48,8 +54,8 @@ impl Stream {
 
     /// Removes an existing post from the stream.
     pub fn remove_post(&mut self, id: usize) -> CatchupResult<()> {
-        let mid = self.post_id_to_idx(id)?;
-        self.posts.remove(mid);
+        let idx = self.post_id_to_idx(id)?;
+        self.posts.remove(idx);
         self.size = self.posts.len();
         self.last_updated = SystemTime::now();
         Ok(())
@@ -78,6 +84,7 @@ impl Stream {
     }
 
     /// Return the latest posts.
+    #[allow(unused_assignments)]
     pub fn catchup(
         &self,
         start_index: usize,
@@ -90,17 +97,24 @@ impl Stream {
         } else {
             end_index
         };
-        //for idx in start_index..end_index {
-        //writeln!(f, "{}", self.posts[idx])?;
-        //}
+        if self
+            .posts
+            .binary_search_by_key(&start_index, |val| val.id().unwrap())
+            .is_err()
+        {
+            // !-------
+            // Fetch result from the db
+            // -------!
+            todo!()
+        }
         let response = CatchUpResponse {
-            posts: self.posts[start_index..end_index].to_vec(),
+            posts: self.posts.clone().into(),
             caught_up,
         };
         Ok(response)
     }
 
-    /// Return a specifi post.
+    /// Return a specific post.
     pub fn get_post(&self, id: usize) -> Option<&Post> {
         let result = self.post_id_to_idx(id);
         match result {
@@ -113,13 +127,19 @@ impl Stream {
         Ok(StreamMetadata {
             posts_count: self.size(),
             last_updated: systime_to_u64(&self.last_updated)?,
-            latest_post_id: self.posts.last().map(|val| val.id().unwrap()),
+            latest_post_id: self.posts.back().map(|val| val.id().unwrap()),
         })
     }
 
     // ***
     // Helpers
     // ***
+    
+    pub fn refresh_cache(&mut self) -> CatchupResult<()> {
+        self.posts.clear();
+        todo!();
+        Ok(())
+    }
 
     /// Get the index of a post in `posts`. The argument specifies
     /// the index of the post from the last post. This return the index from
@@ -157,13 +177,13 @@ impl Stream {
         if self.posts.capacity() <= 10 {
             return Ok(());
         };
-        Ok(self.posts.try_reserve(50)?)
+        Ok(self.posts.try_reserve(STREAM_CACHE_SIZE.into())?)
     }
 
     /// Returns the index of post, with the associated ID, in the posts vector.
     fn post_id_to_idx(&self, id: usize) -> CatchupResult<usize> {
         let mut start = 0;
-        let mut end = self.posts.len();
+        let mut end = self.posts.len() - 1;
         let mut mid = (end + start) / 2;
         let mut post_id = self
             .posts
@@ -171,7 +191,7 @@ impl Stream {
             .ok_or_else(|| StreamError::InvalidId {})?
             .id()?;
 
-        while start <= end {
+        while start < end {
             if id < post_id {
                 end = mid - 1;
             } else if id > post_id {

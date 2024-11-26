@@ -11,6 +11,7 @@ pub use error::{CatchupResult, StreamError};
 pub mod constant {
     pub const MAX_POST_LEN: u16 = 300;
     pub const MAX_POST_TITLE: u16 = 100;
+    pub const STREAM_CACHE_SIZE: u16 = 10;
 }
 
 /// Used to send acknowledgements to the connection handler.
