@@ -1,7 +1,10 @@
 use catchup_core::{post, stream, Command, StreamCommand};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 
-use server::{database, generate_temp_db, handle_conn_request, setup_server, POSTS_TABLE};
+use server::{
+    database, generate_temp_db, handle_conn_request, interprocess::respond_with_string,
+    setup_server,
+};
 
 #[tokio::main]
 async fn main() {
@@ -27,32 +30,33 @@ async fn main() {
                 Command::Create { title, msg } => {
                     let new_post = post::Post::new(stream.size(), title, msg);
                     if new_post.is_err() {
-                        resp.unwrap()
-                            .send(format!("ERROR during create: {:?}", new_post.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during create: {:?}", new_post.unwrap_err()),
+                        );
                         continue;
                     }
                     let new_post = new_post.unwrap();
                     let result = stream.add_post(new_post.clone());
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(format!("ERROR during create: {:?}", result.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during create: {:?}", result.unwrap_err()),
+                        );
                         continue;
                     }
 
                     // Insert into db
-                    let result = database::insert_post(&mut conn, POSTS_TABLE, &new_post);
+                    let result = database::insert_post(&mut conn, &new_post);
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(format!("ERROR during create: {:?}", result.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during create: {:?}", result.unwrap_err()),
+                        );
                         continue;
                     }
 
-                    resp.unwrap()
-                        .send(format!("Succesfully added a new post"))
-                        .unwrap();
+                    respond_with_string(resp.unwrap(), format!("Succesfully added a new post"));
                 }
 
                 Command::Catchup { last_fetch_id } => {
@@ -74,27 +78,30 @@ async fn main() {
                     // Catchup
                     let response = stream.catchup(last_fetch_id, limit_index);
                     if response.is_err() {
-                        resp.unwrap()
-                            .send(format!("An error occured: {:?}", response.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("An error occured: {:?}", response.unwrap_err()),
+                        );
                         continue;
                     }
 
                     // Serialise the response
                     let response = serde_json::to_string(&response.unwrap());
                     if response.is_err() {
-                        resp.unwrap()
-                            .send(format!("An error occured: {:?}", response.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("An error occured: {:?}", response.unwrap_err()),
+                        );
                         continue;
                     }
 
                     // Update database
-                    let result = database::query_posts(&mut conn, "posts", None);
+                    let result = database::query_posts(&mut conn, None);
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(format!("An error occured: {:?}", result.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("An error occured: {:?}", result.unwrap_err()),
+                        );
                         continue;
                     }
                     let rows = result.unwrap();
@@ -110,9 +117,10 @@ async fn main() {
                 Command::Get { id } => {
                     let result = stream.get_post(id);
                     if result.is_none() {
-                        resp.unwrap()
-                            .send(format!("ERROR during get: Unable to get post"))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during get: Unable to get post"),
+                        );
                         continue;
                     }
                     resp.unwrap()
@@ -126,14 +134,24 @@ async fn main() {
                 Command::Delete { id } => {
                     let result = stream.remove_post(id);
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(format!("ERROR during delete: {}", result.unwrap_err()))
-                            .unwrap();
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during delete: {}", result.unwrap_err()),
+                        );
                         continue;
                     }
-                    resp.unwrap()
-                        .send(format!("Succesfully removed post",))
-                        .unwrap();
+
+                    // Delete from db
+                    let result = database::delete_post_by_id(&mut conn, id);
+                    if result.is_err() {
+                        respond_with_string(
+                            resp.unwrap(),
+                            format!("ERROR during delete: {:?}", result.unwrap_err()),
+                        );
+                        continue;
+                    }
+
+                    respond_with_string(resp.unwrap(), format!("Succesfully deleted post"));
                 }
 
                 Command::UpdateMsg { id, msg } => {
@@ -147,9 +165,10 @@ async fn main() {
                             .unwrap();
                         continue;
                     }
-                    resp.unwrap()
-                        .send(format!("Succesfully updated post message",))
-                        .unwrap();
+                    respond_with_string(
+                        resp.unwrap(),
+                        format!("Succesfully updated post message",),
+                    );
                 }
 
                 Command::UpdateTitle { id, title } => {
@@ -163,9 +182,7 @@ async fn main() {
                             .unwrap();
                         continue;
                     }
-                    resp.unwrap()
-                        .send(format!("Succesfully updated post title",))
-                        .unwrap();
+                    respond_with_string(resp.unwrap(), format!("Succesfully updated post title",));
                 }
 
                 Command::Metadata {} => {

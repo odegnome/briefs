@@ -18,6 +18,38 @@ const BUFFER_SIZE: usize = 10240;
 const DB_NAME: &str = "catchup-dev.db";
 pub const POSTS_TABLE: &str = "posts";
 
+pub mod interprocess {
+    use super::oneshot;
+
+    pub enum Status {
+        Success,
+        Failure,
+        Undefined,
+    }
+
+    pub struct InterProcessStatus {
+        pub status: Status,
+        pub code: u32,
+        pub message: [u8; 60],
+    }
+
+    impl InterProcessStatus {
+        pub fn new(status: Status, code: u32, message: [u8; 60]) -> Self {
+            Self {
+                status,
+                code,
+                message,
+            }
+        }
+    }
+
+    /// Sending a response over a oneshot channel returns the input value
+    /// as the error. So, no point in error handling thus this function.
+    pub fn respond_with_string(responder: oneshot::Sender<String>, msg: String) {
+        let _ = responder.send(msg);
+    }
+}
+
 pub mod database {
     use std::time::SystemTime;
 
@@ -81,9 +113,17 @@ pub mod database {
         Ok(())
     }
 
-    pub fn insert_post(conn: &mut Connection, table_name: &str, data: &Post) -> anyhow::Result<()> {
+    pub fn insert_post(conn: &mut Connection, data: &Post) -> anyhow::Result<()> {
         let value_string = data.db_insert_string()?;
-        let statement = format!("INSERT INTO {} VALUES ({})", table_name, value_string);
+        let statement = format!("INSERT INTO {} VALUES ({})", POSTS_TABLE, value_string);
+
+        conn.execute(statement)?;
+
+        Ok(())
+    }
+
+    pub fn delete_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result<()> {
+        let statement = format!("DELETE FROM {} WHERE id={}", POSTS_TABLE, post_id);
 
         conn.execute(statement)?;
 
@@ -92,12 +132,11 @@ pub mod database {
 
     pub fn query_posts(
         conn: &mut Connection,
-        table_name: &str,
         posts_limit: Option<u32>,
     ) -> anyhow::Result<Vec<sqlite::Row>> {
         let statement = format!(
             "SELECT * FROM {} LIMIT {};",
-            table_name,
+            POSTS_TABLE,
             posts_limit.unwrap_or(20)
         );
 
@@ -106,6 +145,27 @@ pub mod database {
         let result: Vec<sqlite::Row> = stmt.iter().filter_map(|val| val.ok()).collect();
 
         Ok(result)
+    }
+
+    pub fn query_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result<sqlite::Row> {
+        let statement = format!("SELECT * FROM {} WHERE id={}", POSTS_TABLE, post_id);
+
+        let mut stmt = conn.prepare(statement)?;
+
+        let mut result: Vec<sqlite::Row> = stmt.iter().filter_map(|val| val.ok()).collect();
+
+        if result.len() == 0 {
+            return Err(
+                ServerError::custom_error("Post not found with the given ID".into()).into(),
+            );
+        } else if result.len() > 1 {
+            return Err(ServerError::custom_error(
+                "BROKEN Db: Multiple posts found with the same ID".into(),
+            )
+            .into());
+        }
+
+        Ok(result.remove(0))
     }
 }
 
@@ -320,10 +380,10 @@ mod test {
             "Hello there, this is my first post".into(),
         )
         .unwrap();
-        let result = database::insert_post(&mut conn, POSTS_TABLE, &post);
+        let result = database::insert_post(&mut conn, &post);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_posts(&mut conn, POSTS_TABLE, None);
+        let result = database::query_posts(&mut conn, None);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         //----- Expected values
@@ -356,6 +416,61 @@ mod test {
             row_data[0].take(4),
         ];
         assert_eq!(actual_columns, expected_columns);
+
+        std::fs::remove_file(path).expect("Db cleanup failed");
+    }
+
+    #[test]
+    fn test_delete_from_table() {
+        let db_name = generate_random_db_name();
+        let path = std::env::temp_dir().join(db_name.clone());
+        setup_db(Some(path.clone())).unwrap();
+
+        assert!(path.exists(), "Db creation failed at expected path");
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let result = database::setup_tables(&mut conn);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = database::query_table_info(&mut conn, POSTS_TABLE);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let post = Post::new(
+            0,
+            "Post #1".into(),
+            "Hello there, this is my first post".into(),
+        )
+        .unwrap();
+        let result = database::insert_post(&mut conn, &post);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = database::query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 1;
+        //-----
+
+        let row_data = result.unwrap();
+        let actual_rows = row_data.len();
+        assert_eq!(actual_rows, expected_rows);
+
+        println!("{:?}", row_data);
+
+        let result = database::delete_post_by_id(&mut conn, 0);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = database::query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 0;
+        //-----
+
+        let row_data = result.unwrap();
+        let actual_rows = row_data.len();
+        assert_eq!(actual_rows, expected_rows);
 
         std::fs::remove_file(path).expect("Db cleanup failed");
     }
