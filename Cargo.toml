@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/catchup-core",
-    "crates/catchup-json",
-    "crates/catchup-proto",
+    "crates/briefs-core",
+    "crates/briefs-json",
+    "crates/briefs-proto",
     "crates/server",
 ]
 resolver = "2"

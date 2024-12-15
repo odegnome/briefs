@@ -1,4 +1,4 @@
-use catchup_core::{post, stream, Command, StreamCommand};
+use briefs_core::{post, stream, Command, StreamCommand};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 
 use server::{

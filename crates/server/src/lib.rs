@@ -3,7 +3,7 @@ pub mod interfaces;
 
 pub use error::ServerError;
 
-use catchup_core::{Command, StreamCommand};
+use briefs_core::{Command, StreamCommand};
 use rand::{thread_rng, Rng};
 use sqlite;
 use std::{net::SocketAddr, path::PathBuf, process};
@@ -15,7 +15,7 @@ use tokio::{
 
 /// 10Kb buffer
 const BUFFER_SIZE: usize = 10240;
-const DB_NAME: &str = "catchup-dev.db";
+const DB_NAME: &str = "briefs-dev.db";
 pub const POSTS_TABLE: &str = "posts";
 
 pub mod interprocess {
@@ -51,9 +51,7 @@ pub mod interprocess {
 }
 
 pub mod database {
-    use std::time::SystemTime;
-
-    use catchup_core::post::Post;
+    use briefs_core::post::Post;
     use sqlite::Connection;
 
     use super::*;
@@ -71,7 +69,7 @@ pub mod database {
                     .map_err(|_| ServerError::custom_error("Unable to load post ID".into()))?,
                 self.title,
                 self.msg,
-                self.date.duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+                self.date,
                 self.edited
             ))
         }
@@ -248,6 +246,9 @@ pub async fn handle_conn_request(
     }
 }
 
+/// Creates a buffer of four 16 bit fields. Such that when generating
+/// random numbers, the range of each 16 bit field is 0-65536. Hence,
+/// each random db name is `prefix-xxxxx-xxxxx-xxxxx-xxxxx.db`
 pub fn generate_random_db_name() -> String {
     let mut buffer = [0u16; 4];
     thread_rng().fill(&mut buffer);
@@ -256,7 +257,7 @@ pub fn generate_random_db_name() -> String {
         .map(|val| format!("{:05}", val.to_be()))
         .collect::<Vec<String>>()
         .join("-");
-    result.insert_str(0, "catchup-");
+    result.insert_str(0, "briefs-");
     result.push_str(".db");
     result
 }
@@ -269,9 +270,7 @@ pub fn generate_temp_db() -> PathBuf {
 
 #[cfg(test)]
 mod test {
-    use std::time::SystemTime;
-
-    use catchup_core::post::Post;
+    use briefs_core::post::Post;
     use sqlite::Value;
 
     use super::*;
@@ -284,7 +283,7 @@ mod test {
             .map(|val| format!("{:05}", val.to_be()))
             .collect::<Vec<String>>()
             .join("-");
-        result.insert_str(0, "catchup-");
+        result.insert_str(0, "briefs-");
         result.push_str(".db");
         result
     }
@@ -293,9 +292,9 @@ mod test {
     fn test_generate_random_db_name() {
         for _ in 0..5 {
             let db_name = generate_random_db_name();
-            assert!(db_name.starts_with("catchup-"));
+            assert!(db_name.starts_with("briefs-"));
             assert!(db_name.ends_with(".db"));
-            assert!(db_name.len() == 34);
+            assert!(db_name.len() == 33);
         }
     }
 
@@ -394,9 +393,6 @@ mod test {
             Value::String(post.msg),
             Value::Integer(
                 post.date
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs()
                     .try_into()
                     .expect("Error: Unable to convert timestamp to sqlite integer"),
             ),

@@ -1,26 +1,18 @@
 use crate::{
     constant::STREAM_CACHE_SIZE,
-    post::Post,
+    post::{time_in_sec, Post},
     state::{CatchUpResponse, StreamMetadata},
-    CatchupResult, StreamError,
+    BriefsResult, BriefsError,
 };
-use std::{
-    collections::VecDeque,
-    fmt::Display,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::VecDeque, fmt::Display, time::SystemTime};
 
 /// A Stream contains all the posts and some metadata.
 #[derive(Debug)]
 pub struct Stream {
     posts: VecDeque<Post>,
     size: usize,
-    last_updated: SystemTime,
-    date_of_inception: SystemTime,
-}
-
-fn systime_to_u64(time: &SystemTime) -> CatchupResult<u64> {
-    Ok(time.duration_since(UNIX_EPOCH)?.as_secs())
+    last_updated: u64,
+    date_of_inception: u64,
 }
 
 impl Default for Stream {
@@ -28,8 +20,8 @@ impl Default for Stream {
         Stream {
             posts: VecDeque::with_capacity(STREAM_CACHE_SIZE.into()),
             size: 0,
-            date_of_inception: SystemTime::now(),
-            last_updated: SystemTime::now(),
+            date_of_inception: time_in_sec(SystemTime::now()).unwrap(),
+            last_updated: time_in_sec(SystemTime::now()).unwrap(),
         }
     }
 }
@@ -40,7 +32,7 @@ impl Stream {
     // ***
 
     /// Adds a new post to the current stream.
-    pub fn add_post(&mut self, post: Post) -> CatchupResult<()> {
+    pub fn add_post(&mut self, post: Post) -> BriefsResult<()> {
         self.increase_capacity()?;
         if self.posts.len() == STREAM_CACHE_SIZE.into() {
             self.posts.pop_front();
@@ -48,38 +40,38 @@ impl Stream {
         }
         self.posts.push_back(post);
         self.size += 1;
-        self.last_updated = SystemTime::now();
+        self.last_updated = time_in_sec(SystemTime::now())?;
         Ok(())
     }
 
     /// Removes an existing post from the stream.
-    pub fn remove_post(&mut self, id: usize) -> CatchupResult<()> {
+    pub fn remove_post(&mut self, id: usize) -> BriefsResult<()> {
         let idx = self.post_id_to_idx(id)?;
         self.posts.remove(idx);
         self.size = self.posts.len();
-        self.last_updated = SystemTime::now();
+        self.last_updated = time_in_sec(SystemTime::now())?;
         Ok(())
     }
 
     /// Update an existing post with the new message.
-    pub fn update_msg(&mut self, id: usize, new_msg: String) -> CatchupResult<()> {
+    pub fn update_msg(&mut self, id: usize, new_msg: String) -> BriefsResult<()> {
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
             .get_mut(post_id)
-            .ok_or_else(|| StreamError::InvalidId {})?;
-        self.last_updated = SystemTime::now();
+            .ok_or_else(|| BriefsError::InvalidId {})?;
+        self.last_updated = time_in_sec(SystemTime::now())?;
         post.update_msg(new_msg)
     }
 
     /// Update an existing post with the new title.
-    pub fn update_title(&mut self, id: usize, new_title: String) -> CatchupResult<()> {
+    pub fn update_title(&mut self, id: usize, new_title: String) -> BriefsResult<()> {
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
             .get_mut(post_id)
-            .ok_or_else(|| StreamError::InvalidId {})?;
-        self.last_updated = SystemTime::now();
+            .ok_or_else(|| BriefsError::InvalidId {})?;
+        self.last_updated = time_in_sec(SystemTime::now())?;
         post.update_title(new_title)
     }
 
@@ -89,7 +81,7 @@ impl Stream {
         &self,
         start_index: usize,
         mut end_index: usize,
-    ) -> CatchupResult<CatchUpResponse> {
+    ) -> BriefsResult<CatchUpResponse> {
         let mut caught_up = false;
         end_index = if self.size() <= end_index {
             caught_up = true;
@@ -123,10 +115,10 @@ impl Stream {
         }
     }
 
-    pub fn stream_metadata(&self) -> CatchupResult<StreamMetadata> {
+    pub fn stream_metadata(&self) -> BriefsResult<StreamMetadata> {
         Ok(StreamMetadata {
             posts_count: self.size(),
-            last_updated: systime_to_u64(&self.last_updated)?,
+            last_updated: self.last_updated,
             latest_post_id: self.posts.back().map(|val| val.id().unwrap()),
         })
     }
@@ -134,21 +126,20 @@ impl Stream {
     // ***
     // Helpers
     // ***
-    
-    pub fn refresh_cache(&mut self) -> CatchupResult<()> {
+
+    pub fn refresh_cache(&mut self) -> BriefsResult<()> {
         self.posts.clear();
         todo!();
-        Ok(())
     }
 
     /// Get the index of a post in `posts`. The argument specifies
     /// the index of the post from the last post. This return the index from
     /// the start.
     #[allow(dead_code)]
-    fn get_post_index(&self, index: &usize) -> CatchupResult<usize> {
+    fn get_post_index(&self, index: &usize) -> BriefsResult<usize> {
         let posts_count = self.posts.len();
         if *index > posts_count {
-            return Err(StreamError::InvalidIndex {
+            return Err(BriefsError::InvalidIndex {
                 posts_count,
                 given_index: *index,
             }
@@ -158,7 +149,7 @@ impl Stream {
     }
 
     /// Get the last time the stream was updated
-    pub fn last_updated(&self) -> SystemTime {
+    pub fn last_updated(&self) -> u64 {
         self.last_updated.clone()
     }
 
@@ -168,12 +159,12 @@ impl Stream {
     }
 
     /// Get the date of inception/creation of the stream
-    pub fn date_of_inception(&self) -> SystemTime {
+    pub fn date_of_inception(&self) -> u64 {
         self.date_of_inception
     }
 
     /// Increase the capacity of the stream by 50
-    fn increase_capacity(&mut self) -> CatchupResult<()> {
+    fn increase_capacity(&mut self) -> BriefsResult<()> {
         if self.posts.capacity() <= 10 {
             return Ok(());
         };
@@ -181,14 +172,14 @@ impl Stream {
     }
 
     /// Returns the index of post, with the associated ID, in the posts vector.
-    fn post_id_to_idx(&self, id: usize) -> CatchupResult<usize> {
+    fn post_id_to_idx(&self, id: usize) -> BriefsResult<usize> {
         let mut start = 0;
         let mut end = self.posts.len() - 1;
         let mut mid = (end + start) / 2;
         let mut post_id = self
             .posts
             .get(mid)
-            .ok_or_else(|| StreamError::InvalidId {})?
+            .ok_or_else(|| BriefsError::InvalidId {})?
             .id()?;
 
         while start < end {
@@ -203,18 +194,18 @@ impl Stream {
             post_id = self
                 .posts
                 .get(mid)
-                .ok_or_else(|| StreamError::InvalidId {})?
+                .ok_or_else(|| BriefsError::InvalidId {})?
                 .id()?;
         }
 
         if self
             .posts
             .get(mid)
-            .ok_or_else(|| StreamError::InvalidId {})?
+            .ok_or_else(|| BriefsError::InvalidId {})?
             .id()?
             != id
         {
-            return Err(StreamError::InvalidId {}.into());
+            return Err(BriefsError::InvalidId {}.into());
         }
 
         Ok(mid)

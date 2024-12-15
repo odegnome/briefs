@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use catchup_core::post::Post;
+use briefs_core::post::Post;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]

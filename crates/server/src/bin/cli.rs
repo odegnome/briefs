@@ -1,6 +1,7 @@
-use catchup_core::StreamError;
-use catchup_core::{state::CatchUpResponse, CatchupResult, Command};
+use briefs_core::BriefsError;
+use briefs_core::{state::CatchUpResponse, BriefsResult, Command};
 use clap::{Parser, Subcommand};
+use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::{net::IpAddr, path::PathBuf};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
@@ -11,28 +12,28 @@ const BUFFER_SIZE: usize = 10240;
 #[command(author, version, about, long_about=None)]
 struct Cli {
     #[arg(short, long, value_name = "FILE")]
-    /// Path to config file; defaults to ~/.catchup/config.toml
+    /// Path to config file; defaults to ~/.briefs/config.toml
     config: Option<PathBuf>,
 
     #[arg(short, long)]
-    /// The socket address of the catchup server. For ex, localhost:8080
+    /// The socket address of the briefs server. For ex, localhost:8080
     socket_addr: Option<SocketAddr>,
 
     #[command(subcommand)]
-    command: CliCommand,
+    command: BriefsCommand,
 }
 
 #[derive(Subcommand, Clone, Debug)]
-pub enum CliCommand {
+pub enum BriefsCommand {
     /// Creates a new post with the given `title` and `message`
     NewPost {
         #[arg(short, long)]
-        title: String,
+        title: Option<String>,
         #[arg(short, long)]
-        msg: String,
+        msg: Option<String>,
     },
 
-    /// Catchup with the latest posts
+    /// briefs with the latest posts
     Catchup {
         idx: Option<usize>,
     },
@@ -58,8 +59,34 @@ pub enum CliCommand {
     StreamMetadata {},
 }
 
-async fn new_post(mut stream: TcpStream, title: String, msg: String) -> CatchupResult<()> {
-    let request = Command::Create { title, msg };
+async fn new_post(
+    mut stream: TcpStream,
+    title: Option<String>,
+    msg: Option<String>,
+) -> BriefsResult<()> {
+    let inner_title = title.unwrap_or_else(|| {
+        print!("Enter post title: ");
+        std::io::stdout().flush().unwrap();
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_line(&mut buf)
+            .expect("Unable to read post title.");
+        buf
+    });
+
+    let inner_msg = msg.unwrap_or_else(|| {
+        println!("Enter post msg(Press Ctrl-d on new line to end): ");
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .expect("Unable to read post msg.");
+        buf.replace("\n", " ").trim().into()
+    });
+
+    let request = Command::Create {
+        title: inner_title,
+        msg: inner_msg,
+    };
     stream.writable().await.unwrap();
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -80,7 +107,7 @@ async fn new_post(mut stream: TcpStream, title: String, msg: String) -> CatchupR
     Ok(())
 }
 
-async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<()> {
+async fn briefs(mut stream: TcpStream, starting_index: usize) -> BriefsResult<()> {
     let request = Command::Catchup {
         last_fetch_id: starting_index,
     };
@@ -96,11 +123,11 @@ async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
-            let response = serde_json::from_str::<CatchUpResponse>(&response)?;
+            let response = serde_json::from_str::<crate::CatchUpResponse>(&response)?;
             println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -108,7 +135,7 @@ async fn catchup(mut stream: TcpStream, starting_index: usize) -> CatchupResult<
     Ok(())
 }
 
-async fn get_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
+async fn get_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
     let request = Command::Get { id };
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -122,11 +149,11 @@ async fn get_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
-            let response = serde_json::from_str::<catchup_core::post::Post>(&response)?;
+            let response = serde_json::from_str::<briefs_core::post::Post>(&response)?;
             println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -134,7 +161,7 @@ async fn get_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
     Ok(())
 }
 
-async fn remove_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
+async fn remove_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
     let request = Command::Delete { id };
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -148,7 +175,7 @@ async fn remove_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
@@ -159,7 +186,7 @@ async fn remove_post(mut stream: TcpStream, id: usize) -> CatchupResult<()> {
     Ok(())
 }
 
-async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> CatchupResult<()> {
+async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> BriefsResult<()> {
     let request = Command::UpdateMsg { id, msg };
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -173,7 +200,7 @@ async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> CatchupRes
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
@@ -184,7 +211,7 @@ async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> CatchupRes
     Ok(())
 }
 
-async fn update_title(mut stream: TcpStream, id: usize, title: String) -> CatchupResult<()> {
+async fn update_title(mut stream: TcpStream, id: usize, title: String) -> BriefsResult<()> {
     let request = Command::UpdateTitle { id, title };
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -198,7 +225,7 @@ async fn update_title(mut stream: TcpStream, id: usize, title: String) -> Catchu
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
@@ -209,7 +236,7 @@ async fn update_title(mut stream: TcpStream, id: usize, title: String) -> Catchu
     Ok(())
 }
 
-async fn stream_metadata(mut stream: TcpStream) -> CatchupResult<()> {
+async fn stream_metadata(mut stream: TcpStream) -> BriefsResult<()> {
     let request = Command::Metadata {};
     let bytes = stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -223,11 +250,11 @@ async fn stream_metadata(mut stream: TcpStream) -> CatchupResult<()> {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                StreamError::CustomError {
+                BriefsError::CustomError {
                     msg: "Unable to decode UTF-8".into(),
                 }
             })?;
-            let response = serde_json::from_str::<catchup_core::state::StreamMetadata>(&response)?;
+            let response = serde_json::from_str::<briefs_core::state::StreamMetadata>(&response)?;
             println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -264,38 +291,38 @@ async fn main() {
     let stream = TcpStream::connect(socket).await.unwrap();
 
     match cli.command {
-        CliCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
-        CliCommand::Catchup { idx } => {
-            let result = catchup(stream, idx.unwrap_or_default()).await;
+        BriefsCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
+        BriefsCommand::Catchup { idx } => {
+            let result = briefs(stream, idx.unwrap_or_default()).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
         }
-        CliCommand::GetPost { id } => {
+        BriefsCommand::GetPost { id } => {
             let result = get_post(stream, id).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
         }
-        CliCommand::DeletePost { id } => {
+        BriefsCommand::DeletePost { id } => {
             let result = remove_post(stream, id).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
         }
-        CliCommand::UpdateMsg { id, msg } => {
+        BriefsCommand::UpdateMsg { id, msg } => {
             let result = update_msg(stream, id, msg).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
         }
-        CliCommand::UpdateTitle { id, title } => {
+        BriefsCommand::UpdateTitle { id, title } => {
             let result = update_title(stream, id, title).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }
         }
-        CliCommand::StreamMetadata {} => {
+        BriefsCommand::StreamMetadata {} => {
             let result = stream_metadata(stream).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
