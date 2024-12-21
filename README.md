@@ -8,12 +8,15 @@ other applications.
 
 This is developed using [Rust](https://www.rust-lang.org/) and uses [sqlite](https://www.sqlite.org/) in the backend.
 
+## Table of Content
+
+- [Issues](#issues)
+- [MVP](#mvp)
+- [overview](#overview)
+
 ## Issues (Bug Tracker)
 
 In order to report any bugs, please open a new issue [here](https://github.com/Coder-RG/catchup/issues).
-
-- [MVP](#mvp)
-- [overview](#overview)
 
 ## MVP
 
