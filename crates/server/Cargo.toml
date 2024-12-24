@@ -19,3 +19,4 @@ semver = "1.0.23"
 
 [dev-dependencies]
 magic-crypt = { version = "4.0.1" }
+tokio-rustls = "0.26.1"
