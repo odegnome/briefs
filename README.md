@@ -27,3 +27,9 @@ In order to report any bugs, please open a new issue [here](https://github.com/C
 ## Overview
 
 ![overview](./images/overview.png)
+
+TODO:
+
+- [Generate Private key & Certificate](https://www.ibm.com/docs/en/license-metric-tool?topic=certificate-step-1-creating-private-keys-certificates)
+- [Setup PKI by Cloudfare](https://blog.cloudflare.com/how-to-build-your-own-public-key-infrastructure/)
+- [Let's Encrypt](https://letsencrypt.org/getting-started/)
