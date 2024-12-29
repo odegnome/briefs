@@ -19,6 +19,5 @@ semver = "1.0.23"
 
 [dev-dependencies]
 argh = "0.1.13"
-magic-crypt = { version = "4.0.1" }
 tokio-rustls = "0.26.1"
 webpki-roots = "0.26.7"
