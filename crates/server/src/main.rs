@@ -1,5 +1,11 @@
-use briefs_core::{post, stream, Command, StreamCommand};
+use std::path::PathBuf;
+use std::{net::ToSocketAddrs, sync::Arc};
+
+use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
+use tokio_rustls::{rustls, TlsAcceptor};
+
+use briefs_core::{post, stream, Command, StreamCommand};
 
 use server::{
     database, generate_temp_db, handle_conn_request, interprocess::respond_with_string,
@@ -208,17 +214,36 @@ async fn main() {
     });
 
     let conn_handle = tokio::spawn(async move {
-        println!("Connection handle running...");
+        let socket_addr = "0.0.0.0:8080".to_socket_addrs().unwrap().next().unwrap();
+        let server_cert = PathBuf::new();
+        let private_key = PathBuf::new();
+        println!("Setting up connection handler...");
+
+        let certs = CertificateDer::pem_file_iter(server_cert)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let key = PrivateKeyDer::from_pem_file(private_key).unwrap();
+
+        let config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, key)
+            .unwrap();
+        let acceptor = TlsAcceptor::from(Arc::new(config));
 
         // !------- ACCEPT CONNECTIONS ON PORT 8080 -------!
-        let listener = TcpListener::bind("0.0.0.0:8080").await.unwrap();
+        let listener = TcpListener::bind(socket_addr).await.unwrap();
         println!("Listening on {}...", listener.local_addr().unwrap());
 
         loop {
             let _tx = tx.clone();
             let conn = listener.accept().await;
+            let acceptor = acceptor.clone();
+
             if conn.is_ok() {
                 tokio::spawn(async move {
+                    let stream = acceptor.accept(conn.unwrap().0).await.unwrap();
+                    // function signature needs to change for this
                     handle_conn_request(conn.unwrap(), _tx).await;
                 });
             }
