@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{net::ToSocketAddrs, sync::Arc};
 
 use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
@@ -215,8 +215,8 @@ async fn main() {
 
     let conn_handle = tokio::spawn(async move {
         let socket_addr = "0.0.0.0:8080".to_socket_addrs().unwrap().next().unwrap();
-        let server_cert = PathBuf::new();
-        let private_key = PathBuf::new();
+        let server_cert = PathBuf::from("<full-path>");
+        let private_key = PathBuf::from("<full-path>");
         println!("Setting up connection handler...");
 
         let certs = CertificateDer::pem_file_iter(server_cert)
@@ -244,7 +244,7 @@ async fn main() {
                 tokio::spawn(async move {
                     let stream = acceptor.accept(conn.unwrap().0).await.unwrap();
                     // function signature needs to change for this
-                    handle_conn_request(conn.unwrap(), _tx).await;
+                    handle_conn_request(stream, _tx).await;
                 });
             }
         }

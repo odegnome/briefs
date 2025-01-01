@@ -6,9 +6,10 @@ pub use error::ServerError;
 use briefs_core::{Command, StreamCommand};
 use rand::{thread_rng, Rng};
 use sqlite;
-use std::{net::SocketAddr, path::PathBuf, process};
+use tokio_rustls::server::TlsStream;
+use std::{path::PathBuf, process};
 use tokio::{
-    io::AsyncWriteExt,
+    io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     sync::{mpsc, oneshot},
 };
@@ -218,16 +219,17 @@ pub fn setup_server(db_path: Option<PathBuf>) -> anyhow::Result<()> {
 }
 
 pub async fn handle_conn_request(
-    mut conn: (TcpStream, SocketAddr),
+    mut conn: TlsStream<TcpStream>,
     tx: mpsc::Sender<StreamCommand>,
 ) {
-    println!("Succesfully connected with {:?}", conn.1);
+    println!("Succesfully connected with {:?}", conn.get_ref().0.peer_addr());
 
-    conn.0.readable().await.unwrap();
+    conn.get_ref().0.readable().await.unwrap();
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(1024usize);
 
-    match conn.0.try_read(&mut kb_buffer) {
+    match conn.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let cmd = serde_json::from_slice::<Command>(&kb_buffer[..bytes]).unwrap();
@@ -240,7 +242,8 @@ pub async fn handle_conn_request(
             tx.send(wrapped_cmd).await.unwrap();
             let result = sender.await.unwrap();
             println!("CONN:\n{}", result);
-            conn.0.write(result.as_bytes()).await.unwrap();
+            conn.write_all(result.as_bytes()).await.unwrap();
+            conn.shutdown().await.unwrap();
         }
         Err(e) => eprintln!("Error reading into buffer: {:?}", e),
     }

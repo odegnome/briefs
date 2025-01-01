@@ -69,7 +69,6 @@ async fn main() -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
     tokio::select! {
         ret = copy(&mut reader, &mut stdout) => {
             ret?;
-            writer.shutdown().await?
         },
         ret = copy(&mut stdin, &mut writer) => {
             ret?;

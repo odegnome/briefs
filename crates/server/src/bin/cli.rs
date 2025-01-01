@@ -1,10 +1,17 @@
+#![allow(dead_code)]
 use briefs_core::BriefsError;
 use briefs_core::{state::CatchUpResponse, BriefsResult, Command};
 use clap::{Parser, Subcommand};
+use tokio::io::AsyncReadExt;
+use tokio_rustls::client::TlsStream;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::{net::IpAddr, path::PathBuf};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
+use tokio_rustls::rustls::pki_types::pem::PemObject;
+use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName};
+use tokio_rustls::{rustls, TlsConnector};
 
 const BUFFER_SIZE: usize = 10240;
 
@@ -18,6 +25,9 @@ struct Cli {
     #[arg(short, long)]
     /// The socket address of the briefs server. For ex, localhost:8080
     socket_addr: Option<SocketAddr>,
+
+    #[arg(long)]
+    cafile: Option<PathBuf>,
 
     #[command(subcommand)]
     command: BriefsCommand,
@@ -60,7 +70,7 @@ pub enum BriefsCommand {
 }
 
 async fn new_post(
-    mut stream: TcpStream,
+    mut stream: TlsStream<TcpStream>,
     title: Option<String>,
     msg: Option<String>,
 ) -> BriefsResult<()> {
@@ -87,16 +97,23 @@ async fn new_post(
         title: inner_title,
         msg: inner_msg,
     };
-    stream.writable().await.unwrap();
-    let bytes = stream
-        .write(&serde_json::to_vec(&request).unwrap().as_slice())
+    // stream.writable().await.unwrap();
+    let _bytes = stream
+        .write_all(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    // println!("Written {bytes} bytes");
+    //
+    // let (mut reader, mut writer) = split(stream);
+    // stream.flush().await.unwrap();
+    // println!("Flushed data");
+    stream.shutdown().await.unwrap();
+    println!("Completed shutdown");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(1024usize);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).unwrap();
@@ -104,6 +121,9 @@ async fn new_post(
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     };
+
+    // stream.shutdown().await.unwrap();
+    // println!("Completed shutdown");
     Ok(())
 }
 
@@ -288,45 +308,69 @@ async fn main() {
     let cli = Cli::parse();
 
     let socket = validate_socket(&cli).unwrap();
+    // !-------
+    // Shouldn't be hardcoded
+    // -------!
+    let domain = ServerName::try_from("brief.com").unwrap();
+
+    let mut root_cert_store = rustls::RootCertStore::empty();
+    if let Some(cafile) = &cli.cafile {
+        for cert in CertificateDer::pem_file_iter(cafile).unwrap() {
+            root_cert_store.add(cert.unwrap()).unwrap();
+        }
+    } else {
+        root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    }
+
+    let config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_cert_store)
+        .with_no_client_auth();
+    // !-------
+    // Probably don't need Arc here
+    // -------!
+    let connector = TlsConnector::from(Arc::new(config));
     let stream = TcpStream::connect(socket).await.unwrap();
+
+    let stream = connector.connect(domain, stream).await.unwrap();
 
     match cli.command {
         BriefsCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
-        BriefsCommand::Catchup { idx } => {
-            let result = briefs(stream, idx.unwrap_or_default()).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
-        BriefsCommand::GetPost { id } => {
-            let result = get_post(stream, id).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
-        BriefsCommand::DeletePost { id } => {
-            let result = remove_post(stream, id).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
-        BriefsCommand::UpdateMsg { id, msg } => {
-            let result = update_msg(stream, id, msg).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
-        BriefsCommand::UpdateTitle { id, title } => {
-            let result = update_title(stream, id, title).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
-        BriefsCommand::StreamMetadata {} => {
-            let result = stream_metadata(stream).await;
-            if result.is_err() {
-                eprintln!("ERROR: {}", result.unwrap_err());
-            }
-        }
+        _ => unimplemented!(),
+        // BriefsCommand::Catchup { idx } => {
+        //     let result = briefs(stream, idx.unwrap_or_default()).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
+        // BriefsCommand::GetPost { id } => {
+        //     let result = get_post(stream, id).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
+        // BriefsCommand::DeletePost { id } => {
+        //     let result = remove_post(stream, id).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
+        // BriefsCommand::UpdateMsg { id, msg } => {
+        //     let result = update_msg(stream, id, msg).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
+        // BriefsCommand::UpdateTitle { id, title } => {
+        //     let result = update_title(stream, id, title).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
+        // BriefsCommand::StreamMetadata {} => {
+        //     let result = stream_metadata(stream).await;
+        //     if result.is_err() {
+        //         eprintln!("ERROR: {}", result.unwrap_err());
+        //     }
+        // }
     }
 }
