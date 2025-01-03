@@ -97,21 +97,19 @@ async fn new_post(
         title: inner_title,
         msg: inner_msg,
     };
-    // stream.writable().await.unwrap();
     let _bytes = stream
         .write_all(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
     // println!("Written {bytes} bytes");
     //
-    // let (mut reader, mut writer) = split(stream);
     // stream.flush().await.unwrap();
     // println!("Flushed data");
     stream.shutdown().await.unwrap();
     println!("Completed shutdown");
 
     // let mut kb_buffer = [0u8; BUFFER_SIZE];
-    let mut kb_buffer = Vec::with_capacity(1024usize);
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
     // stream.readable().await.unwrap();
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
@@ -122,24 +120,24 @@ async fn new_post(
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     };
 
-    // stream.shutdown().await.unwrap();
-    // println!("Completed shutdown");
     Ok(())
 }
 
-async fn briefs(mut stream: TcpStream, starting_index: usize) -> BriefsResult<()> {
+async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize) -> BriefsResult<()> {
     let request = Command::Catchup {
         last_fetch_id: starting_index,
     };
-    let bytes = stream
-        .write(&serde_json::to_vec(&request).unwrap().as_slice())
+    stream
+        .write_all(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
+    // println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -155,17 +153,19 @@ async fn briefs(mut stream: TcpStream, starting_index: usize) -> BriefsResult<()
     Ok(())
 }
 
-async fn get_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
+async fn get_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<()> {
     let request = Command::Get { id };
-    let bytes = stream
-        .write(&serde_json::to_vec(&request).unwrap().as_slice())
+    stream
+        .write_all(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    // println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -181,17 +181,19 @@ async fn get_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
     Ok(())
 }
 
-async fn remove_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
+async fn remove_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<()> {
     let request = Command::Delete { id };
-    let bytes = stream
+    stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
+    // println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -206,17 +208,19 @@ async fn remove_post(mut stream: TcpStream, id: usize) -> BriefsResult<()> {
     Ok(())
 }
 
-async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> BriefsResult<()> {
+async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) -> BriefsResult<()> {
     let request = Command::UpdateMsg { id, msg };
-    let bytes = stream
+    stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
+    // println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -231,17 +235,19 @@ async fn update_msg(mut stream: TcpStream, id: usize, msg: String) -> BriefsResu
     Ok(())
 }
 
-async fn update_title(mut stream: TcpStream, id: usize, title: String) -> BriefsResult<()> {
+async fn update_title(mut stream: TlsStream<TcpStream>, id: usize, title: String) -> BriefsResult<()> {
     let request = Command::UpdateTitle { id, title };
-    let bytes = stream
+    stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
+    // println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -256,17 +262,19 @@ async fn update_title(mut stream: TcpStream, id: usize, title: String) -> Briefs
     Ok(())
 }
 
-async fn stream_metadata(mut stream: TcpStream) -> BriefsResult<()> {
+async fn stream_metadata(mut stream: TlsStream<TcpStream>) -> BriefsResult<()> {
     let request = Command::Metadata {};
-    let bytes = stream
+    stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
         .await
         .unwrap();
-    println!("Written {bytes} bytes");
+    stream.shutdown().await.unwrap();
+    // println!("Written {bytes} bytes");
 
-    let mut kb_buffer = [0u8; BUFFER_SIZE];
-    stream.readable().await.unwrap();
-    match stream.try_read(&mut kb_buffer) {
+    // let mut kb_buffer = [0u8; BUFFER_SIZE];
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
+    // stream.readable().await.unwrap();
+    match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
             let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
@@ -335,42 +343,41 @@ async fn main() {
 
     match cli.command {
         BriefsCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
-        _ => unimplemented!(),
-        // BriefsCommand::Catchup { idx } => {
-        //     let result = briefs(stream, idx.unwrap_or_default()).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
-        // BriefsCommand::GetPost { id } => {
-        //     let result = get_post(stream, id).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
-        // BriefsCommand::DeletePost { id } => {
-        //     let result = remove_post(stream, id).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
-        // BriefsCommand::UpdateMsg { id, msg } => {
-        //     let result = update_msg(stream, id, msg).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
-        // BriefsCommand::UpdateTitle { id, title } => {
-        //     let result = update_title(stream, id, title).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
-        // BriefsCommand::StreamMetadata {} => {
-        //     let result = stream_metadata(stream).await;
-        //     if result.is_err() {
-        //         eprintln!("ERROR: {}", result.unwrap_err());
-        //     }
-        // }
+        BriefsCommand::Catchup { idx } => {
+            let result = briefs(stream, idx.unwrap_or_default()).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        BriefsCommand::GetPost { id } => {
+            let result = get_post(stream, id).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        BriefsCommand::DeletePost { id } => {
+            let result = remove_post(stream, id).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        BriefsCommand::UpdateMsg { id, msg } => {
+            let result = update_msg(stream, id, msg).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        BriefsCommand::UpdateTitle { id, title } => {
+            let result = update_title(stream, id, title).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
+        BriefsCommand::StreamMetadata {} => {
+            let result = stream_metadata(stream).await;
+            if result.is_err() {
+                eprintln!("ERROR: {}", result.unwrap_err());
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::{net::ToSocketAddrs, sync::Arc};
 
+use briefs_core::state::CatchUpResponse;
 use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
@@ -66,14 +67,16 @@ async fn main() {
                 }
 
                 Command::Catchup { last_fetch_id } => {
-                    if stream.size() == 0 {
-                        resp.unwrap().send(format!("No posts yet")).unwrap();
+                    if stream.size() == 0 || last_fetch_id >= stream.size() {
+                        let empty_stream_response = serde_json::to_string(&CatchUpResponse {
+                            posts: vec![],
+                            caught_up: true,
+                        })
+                        .unwrap();
+                        respond_with_string(resp.unwrap(), empty_stream_response);
                         continue;
                     };
-                    if last_fetch_id >= stream.size() {
-                        resp.unwrap().send(format!("Caught up!")).unwrap();
-                        continue;
-                    }
+
                     let uncaught_posts = stream.size() - 1 - last_fetch_id;
                     let limit_index = if uncaught_posts > 10 {
                         last_fetch_id + 11
@@ -215,8 +218,8 @@ async fn main() {
 
     let conn_handle = tokio::spawn(async move {
         let socket_addr = "0.0.0.0:8080".to_socket_addrs().unwrap().next().unwrap();
-        let server_cert = PathBuf::from("<full-path>");
-        let private_key = PathBuf::from("<full-path>");
+        let server_cert = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/cert.pem");
+        let private_key = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/key.pem");
         println!("Setting up connection handler...");
 
         let certs = CertificateDer::pem_file_iter(server_cert)

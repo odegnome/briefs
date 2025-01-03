@@ -224,10 +224,8 @@ pub async fn handle_conn_request(
 ) {
     println!("Succesfully connected with {:?}", conn.get_ref().0.peer_addr());
 
-    conn.get_ref().0.readable().await.unwrap();
-
     // let mut kb_buffer = [0u8; BUFFER_SIZE];
-    let mut kb_buffer = Vec::with_capacity(1024usize);
+    let mut kb_buffer = Vec::with_capacity(BUFFER_SIZE);
 
     match conn.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
@@ -249,9 +247,11 @@ pub async fn handle_conn_request(
     }
 }
 
-/// Creates a buffer of four 16 bit fields. Such that when generating
+/// Generates a random db name with four 16-bit fields, such that when generating
 /// random numbers, the range of each 16 bit field is 0-65536. Hence,
 /// each random db name is `prefix-xxxxx-xxxxx-xxxxx-xxxxx.db`
+/// The generated digits are padded with zeroes to ensure standardised
+/// length of each field.
 pub fn generate_random_db_name() -> String {
     let mut buffer = [0u16; 4];
     thread_rng().fill(&mut buffer);
