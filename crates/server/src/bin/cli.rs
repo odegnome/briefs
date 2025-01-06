@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 use briefs_core::BriefsError;
 use briefs_core::{state::CatchUpResponse, BriefsResult, Command};
-use clap::{Parser, Subcommand};
-use tokio::io::AsyncReadExt;
-use tokio_rustls::client::TlsStream;
+use clap::{Parser, Subcommand, ArgAction};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::{net::IpAddr, path::PathBuf};
+use tokio::io::AsyncReadExt;
 use tokio::{io::AsyncWriteExt, net::TcpStream};
+use tokio_rustls::client::TlsStream;
 use tokio_rustls::rustls::pki_types::pem::PemObject;
 use tokio_rustls::rustls::pki_types::{CertificateDer, ServerName};
 use tokio_rustls::{rustls, TlsConnector};
@@ -28,6 +28,10 @@ struct Cli {
 
     #[arg(long)]
     cafile: Option<PathBuf>,
+
+    #[arg(short, long, action = ArgAction::SetTrue)]
+    /// Select if the output should be json
+    json: bool,
 
     #[command(subcommand)]
     command: BriefsCommand,
@@ -123,7 +127,8 @@ async fn new_post(
     Ok(())
 }
 
-async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize) -> BriefsResult<()> {
+/// This function will return an error if .
+async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize, json: bool) -> BriefsResult<()> {
     let request = Command::Catchup {
         last_fetch_id: starting_index,
     };
@@ -146,7 +151,14 @@ async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize) -> Brie
                 }
             })?;
             let response = serde_json::from_str::<crate::CatchUpResponse>(&response)?;
-            println!("{:#?}", response);
+            if !json {
+                println!("caught_up: {}", response.caught_up);
+                for post in response.posts.into_iter() {
+                    println!("{}", post);
+                }
+            } else {
+                println!("{:#?}", response);
+            }
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     }
@@ -235,7 +247,11 @@ async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) ->
     Ok(())
 }
 
-async fn update_title(mut stream: TlsStream<TcpStream>, id: usize, title: String) -> BriefsResult<()> {
+async fn update_title(
+    mut stream: TlsStream<TcpStream>,
+    id: usize,
+    title: String,
+) -> BriefsResult<()> {
     let request = Command::UpdateTitle { id, title };
     stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -344,7 +360,7 @@ async fn main() {
     match cli.command {
         BriefsCommand::NewPost { title, msg } => new_post(stream, title, msg).await.unwrap(),
         BriefsCommand::Catchup { idx } => {
-            let result = briefs(stream, idx.unwrap_or_default()).await;
+            let result = briefs(stream, idx.unwrap_or_default(), cli.json).await;
             if result.is_err() {
                 eprintln!("ERROR: {}", result.unwrap_err());
             }

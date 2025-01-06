@@ -3,7 +3,7 @@
 use crate::{constant, BriefsResult, BriefsError};
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
-use textwrap::wrap;
+use textwrap::{self, wrap};
 
 /// Every time a new post is created by the admin,
 /// this is the struct that stores all the necessary data.
@@ -92,7 +92,8 @@ impl Display for Post {
         write!(f, "{:-<54}\n", "")?;
         write!(f, "\\ {:^50} /\n/ {:50} \\\n", self.title, "")?;
         let mut count = 0u8;
-        for line in wrap(&format!("{}\n", self.msg), 50) {
+        let wrapping_config = textwrap::Options::new(50);
+        for line in wrap(&format!("{}\n", self.msg), wrapping_config) {
             let (left_closure, right_closure) = if count % 2 == 0 {
                 ("\\ ", " /")
             } else {
