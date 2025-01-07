@@ -127,7 +127,6 @@ async fn new_post(
     Ok(())
 }
 
-/// This function will return an error if .
 async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize, json: bool) -> BriefsResult<()> {
     let request = Command::Catchup {
         last_fetch_id: starting_index,
