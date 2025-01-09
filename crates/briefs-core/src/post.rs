@@ -92,14 +92,14 @@ impl Display for Post {
         write!(f, "{:-<54}\n", "")?;
         write!(f, "\\ {:^50} /\n/ {:50} \\\n", self.title, "")?;
         let mut count = 0u8;
-        let wrapping_config = textwrap::Options::new(50);
+        let wrapping_config = textwrap::Options::new(50).break_words(true);
         for line in wrap(&format!("{}\n", self.msg), wrapping_config) {
             let (left_closure, right_closure) = if count % 2 == 0 {
                 ("\\ ", " /")
             } else {
                 ("/ ", " \\")
             };
-            write!(f, "{left_closure}{: <50}{right_closure}\n", line)?;
+            write!(f, "{left_closure}{:*<50}{right_closure}\n", line)?;
             count += 1;
         }
         write!(f, "{:-<54}", "")
