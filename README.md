@@ -22,7 +22,9 @@ In order to report any bugs, please open a new issue [here](https://github.com/C
 
 ![mvp](./images/first-server-test.png)
 
-![unicode](./images/first-unicode-test.png)
+![unicode-text-with-incorrect-formatting](./images/first-unicode-test.png)
+
+![unicode-text-with-correct-formatting](./images/unicode-text.png)
 
 ## Overview
 

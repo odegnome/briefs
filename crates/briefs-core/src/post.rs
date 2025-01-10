@@ -1,8 +1,9 @@
 //! This module defines the `Post` struct which is the heart of CatchUP!
 
-use crate::{constant, BriefsResult, BriefsError};
+use crate::{constant, BriefsError, BriefsResult};
 use std::fmt::{Display, Formatter};
 use std::time::SystemTime;
+use textwrap::core::display_width;
 use textwrap::{self, wrap};
 
 /// Every time a new post is created by the admin,
@@ -92,16 +93,47 @@ impl Display for Post {
         write!(f, "{:-<54}\n", "")?;
         write!(f, "\\ {:^50} /\n/ {:50} \\\n", self.title, "")?;
         let mut count = 0u8;
-        let wrapping_config = textwrap::Options::new(50).break_words(true);
+        let content_width = 50;
+        let wrapping_config = textwrap::Options::new(content_width).break_words(true);
         for line in wrap(&format!("{}\n", self.msg), wrapping_config) {
             let (left_closure, right_closure) = if count % 2 == 0 {
                 ("\\ ", " /")
             } else {
                 ("/ ", " \\")
             };
-            write!(f, "{left_closure}{:*<50}{right_closure}\n", line)?;
+            let text_width = display_width(&line);
+            let whitespace = if content_width >= text_width {
+                content_width - text_width
+            } else {
+                0
+            };
+            write!(f, "{left_closure}{}{}{right_closure}\n", line, " ".repeat(whitespace))?;
             count += 1;
         }
         write!(f, "{:-<54}", "")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn post_formatting_using_display() {
+        let post = Post::new(
+            0,
+            String::from("First Post"),
+            String::from("This is a demo post with emojis to test formatting 😃😃"),
+        )
+        .unwrap();
+        println!("{}", post);
+
+        let post = Post::new(
+            0,
+            String::from("First Post"),
+            String::from("This is a demo post with emojis to test ►→℞+ formatting 😃😃"),
+        )
+        .unwrap();
+        println!("{}", post);
     }
 }
