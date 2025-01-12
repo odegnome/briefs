@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use briefs_core::BriefsError;
 use briefs_core::{state::CatchUpResponse, BriefsResult, Command};
-use clap::{Parser, Subcommand, ArgAction};
+use clap::{ArgAction, Parser, Subcommand};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -127,7 +127,11 @@ async fn new_post(
     Ok(())
 }
 
-async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize, json: bool) -> BriefsResult<()> {
+async fn briefs(
+    mut stream: TlsStream<TcpStream>,
+    starting_index: usize,
+    json: bool,
+) -> BriefsResult<()> {
     let request = Command::Catchup {
         last_fetch_id: starting_index,
     };
@@ -144,12 +148,13 @@ async fn briefs(mut stream: TlsStream<TcpStream>, starting_index: usize, json: b
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
-            let response = serde_json::from_str::<crate::CatchUpResponse>(&response)?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response = serde_json::from_slice::<crate::CatchUpResponse>(&kb_buffer[..bytes])?;
+            // let response = serde_json::from_str::<crate::CatchUpResponse>(&response)?;
             if !json {
                 println!("caught_up: {}", response.caught_up);
                 for post in response.posts.into_iter() {
@@ -179,12 +184,12 @@ async fn get_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<(
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
-            let response = serde_json::from_str::<briefs_core::post::Post>(&response)?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response = serde_json::from_slice::<briefs_core::post::Post>(&kb_buffer[..bytes])?;
             println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -207,11 +212,12 @@ async fn remove_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResul
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
             println!("{:?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -234,11 +240,12 @@ async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) ->
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
             println!("{:?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -265,11 +272,12 @@ async fn update_title(
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
             println!("{:?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -292,12 +300,13 @@ async fn stream_metadata(mut stream: TlsStream<TcpStream>) -> BriefsResult<()> {
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
-                BriefsError::CustomError {
-                    msg: "Unable to decode UTF-8".into(),
-                }
-            })?;
-            let response = serde_json::from_str::<briefs_core::state::StreamMetadata>(&response)?;
+            // let response = String::from_utf8(kb_buffer[..bytes].to_vec()).map_err(|_| {
+            //     BriefsError::CustomError {
+            //         msg: "Unable to decode UTF-8".into(),
+            //     }
+            // })?;
+            let response =
+                serde_json::from_slice::<briefs_core::state::StreamMetadata>(&kb_buffer[..bytes])?;
             println!("{:#?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),

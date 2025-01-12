@@ -49,6 +49,10 @@ pub mod interprocess {
     pub fn respond_with_string(responder: oneshot::Sender<String>, msg: String) {
         let _ = responder.send(msg);
     }
+
+    pub fn respond_with_bytes(responder: oneshot::Sender<Vec<u8>>, msg: Vec<u8>) {
+        let _ = responder.send(msg);
+    }
 }
 
 pub mod database {
@@ -239,8 +243,8 @@ pub async fn handle_conn_request(
             };
             tx.send(wrapped_cmd).await.unwrap();
             let result = sender.await.unwrap();
-            println!("CONN:\n{}", result);
-            conn.write_all(result.as_bytes()).await.unwrap();
+            // println!("CONN:\n{}", result);
+            conn.write_all(result.as_slice()).await.unwrap();
             conn.shutdown().await.unwrap();
         }
         Err(e) => eprintln!("Error reading into buffer: {:?}", e),

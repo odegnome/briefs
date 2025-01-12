@@ -30,7 +30,7 @@ pub enum Command {
 
 pub struct StreamCommand {
     pub cmd: Command,
-    pub resp: Option<Responder<String>>,
+    pub resp: Option<Responder<Vec<u8>>>,
 }
 
 pub mod prelude {
