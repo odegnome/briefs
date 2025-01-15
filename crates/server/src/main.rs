@@ -6,7 +6,7 @@ use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
-use briefs_core::{post, stream, Command, StreamCommand};
+use briefs_core::{post, stream, Command, StreamCommand, StreamResponse};
 
 use server::{
     database, generate_temp_db, handle_conn_request,
@@ -40,7 +40,11 @@ async fn main() {
                     if new_post.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during create: {:?}", new_post.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during create: {:?}",
+                                new_post.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -49,7 +53,11 @@ async fn main() {
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during create: {:?}", result.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during create: {:?}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -59,14 +67,21 @@ async fn main() {
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during create: {:?}", result.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during create: {:?}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
 
                     respond_with_bytes(
                         resp.unwrap(),
-                        format!("Succesfully added a new post").into(),
+                        serde_json::to_vec(&StreamResponse::new(format!(
+                            "Succesfully added a new post"
+                        )))
+                        .unwrap(),
                     );
                 }
 
@@ -93,7 +108,11 @@ async fn main() {
                     if response.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("An error occured: {:?}", response.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "An error occured: {:?}",
+                                response.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -103,7 +122,11 @@ async fn main() {
                     if response.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("An error occured: {:?}", response.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "An error occured: {:?}",
+                                response.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -113,7 +136,11 @@ async fn main() {
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("An error occured: {:?}", result.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "An error occured: {:?}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -132,7 +159,10 @@ async fn main() {
                     if result.is_none() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during get: Unable to get post").into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during get: Unable to get post"
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -146,7 +176,11 @@ async fn main() {
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during delete: {}", result.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during delete: {}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -156,7 +190,11 @@ async fn main() {
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
-                            format!("ERROR during delete: {:?}", result.unwrap_err()).into(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during delete: {:?}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
                         );
                         continue;
                     }
@@ -167,46 +205,58 @@ async fn main() {
                 Command::UpdateMsg { id, msg } => {
                     let result = stream.update_msg(id, msg);
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(
-                                format!("ERROR during message update: {}", result.unwrap_err())
-                                    .into(),
-                            )
-                            .unwrap();
+                        respond_with_bytes(
+                            resp.unwrap(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during message update: {}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
+                        );
                         continue;
                     }
                     respond_with_bytes(
                         resp.unwrap(),
-                        format!("Succesfully updated post message").into(),
+                        serde_json::to_vec(&StreamResponse::new(format!(
+                            "Succesfully updated post message"
+                        )))
+                        .unwrap(),
                     );
                 }
 
                 Command::UpdateTitle { id, title } => {
                     let result = stream.update_title(id, title);
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(
-                                format!("ERROR during title update: {}", result.unwrap_err())
-                                    .into(),
-                            )
-                            .unwrap();
+                        respond_with_bytes(
+                            resp.unwrap(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during title update: {}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
+                        );
                         continue;
                     }
                     respond_with_bytes(
                         resp.unwrap(),
-                        format!("Succesfully updated post title").into(),
+                        serde_json::to_vec(&StreamResponse::new(format!(
+                            "Succesfully updated post title"
+                        )))
+                        .unwrap(),
                     );
                 }
 
                 Command::Metadata {} => {
                     let result = stream.stream_metadata();
                     if result.is_err() {
-                        resp.unwrap()
-                            .send(
-                                format!("ERROR during title update: {}", result.unwrap_err())
-                                    .into(),
-                            )
-                            .unwrap();
+                        respond_with_bytes(
+                            resp.unwrap(),
+                            serde_json::to_vec(&StreamResponse::new(format!(
+                                "ERROR during title update: {}",
+                                result.unwrap_err()
+                            )))
+                            .unwrap(),
+                        );
                         continue;
                     }
                     resp.unwrap()

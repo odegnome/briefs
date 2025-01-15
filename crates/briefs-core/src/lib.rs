@@ -6,7 +6,9 @@ pub mod post;
 pub mod state;
 pub mod stream;
 
-pub use error::{BriefsResult, BriefsError};
+use std::fmt::Display;
+
+pub use error::{BriefsError, BriefsResult};
 
 pub mod constant {
     pub const MAX_POST_LEN: u16 = 300;
@@ -25,13 +27,31 @@ pub enum Command {
     UpdateTitle { id: usize, title: String },
     Delete { id: usize },
     Get { id: usize },
-    Metadata { },
+    Metadata {},
 }
 
 pub struct StreamCommand {
     pub cmd: Command,
     pub resp: Option<Responder<Vec<u8>>>,
 }
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct StreamResponse {
+    msg: String,
+}
+
+impl StreamResponse {
+     pub fn new(msg: String) -> Self {
+        Self { msg }
+    }
+}
+
+impl Display for StreamResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+
 
 pub mod prelude {
     use crate::post;

@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-use briefs_core::BriefsError;
+use briefs_core::StreamResponse;
 use briefs_core::{state::CatchUpResponse, BriefsResult, Command};
 use clap::{ArgAction, Parser, Subcommand};
 use std::io::{Read, Write};
@@ -118,7 +117,7 @@ async fn new_post(
     match stream.read_to_end(&mut kb_buffer).await {
         Ok(bytes) => {
             println!("Read {bytes} bytes");
-            let response = String::from_utf8(kb_buffer[..bytes].to_vec()).unwrap();
+            let response = serde_json::from_slice::<StreamResponse>(&kb_buffer[..bytes]).unwrap();
             println!("{}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -217,7 +216,7 @@ async fn remove_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResul
             //         msg: "Unable to decode UTF-8".into(),
             //     }
             // })?;
-            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
+            let response = serde_json::from_slice::<StreamResponse>(&kb_buffer[..bytes]).unwrap();
             println!("{:?}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
@@ -245,8 +244,8 @@ async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) ->
             //         msg: "Unable to decode UTF-8".into(),
             //     }
             // })?;
-            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
-            println!("{:?}", response);
+            let response = serde_json::from_slice::<StreamResponse>(&kb_buffer[..bytes]).unwrap();
+            println!("{}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     }
@@ -277,8 +276,8 @@ async fn update_title(
             //         msg: "Unable to decode UTF-8".into(),
             //     }
             // })?;
-            let response = serde_json::from_slice::<String>(&kb_buffer[..bytes]);
-            println!("{:?}", response);
+            let response = serde_json::from_slice::<StreamResponse>(&kb_buffer[..bytes]).unwrap();
+            println!("{}", response);
         }
         Err(e) => eprintln!("Error reading from stream: {:?}", e),
     }
