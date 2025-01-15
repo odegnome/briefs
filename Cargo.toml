@@ -1,10 +1,12 @@
-[package]
-name = "catchup"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "crates/briefs-core",
+    "crates/briefs-json",
+    "crates/briefs-proto",
+    "crates/server",
+]
+resolver = "2"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-textwrap = { version = "0.16.0" }
-# serde = { version = "1.0.163", features = ["derive"] }
+[workspace.package]
+authors = ["odeg"]
+description = "A pure rust app that enables anyone to create streams and post updates, which are viewed by the subscribers."

@@ -1,0 +1,20 @@
+syntax = "proto3";
+package catchup;
+
+service Catchup {
+    rpc Create (Post) returns (Ack);
+    rpc Catchup () returns (Posts);
+}
+
+message Post {
+    string title = 1;
+    string msg = 2;
+}
+
+message Posts {
+    repeated Post posts = 1;
+}
+
+message Ack {
+    string msg = 1;
+}
