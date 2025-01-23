@@ -52,7 +52,6 @@ impl Display for StreamResponse {
     }
 }
 
-
 pub mod prelude {
     use crate::post;
     use std::time::SystemTime;
@@ -60,16 +59,16 @@ pub mod prelude {
     use crate::BriefsResult;
 
     pub trait CatchupStream {
-        fn add_post(&mut self, post: post::Post) -> BriefsResult<()>;
-        fn remove_post(&mut self, id: usize) -> BriefsResult<()>;
+        fn insert_post(&mut self, post: post::Post) -> BriefsResult<()>;
+        fn delete_post(&mut self, id: usize) -> BriefsResult<()>;
         fn update_post_msg(&mut self, id: usize, new_msg: String) -> BriefsResult<()>;
+        fn update_post_title(&mut self, id: usize, new_title: String) -> BriefsResult<()>;
         fn last_updated(&self) -> SystemTime;
-        fn size(&self) -> usize;
-        fn date_of_inception(&self) -> SystemTime;
+        fn metadata(&self) -> ();
     }
 
     pub trait CatchupPost {
-        fn new<T>(id: usize, title: String, msg: String) -> BriefsResult<T>;
+        fn new(id: usize, title: String, msg: String) -> BriefsResult<()>;
         fn update_msg(id: usize, msg: String) -> BriefsResult<()>;
         fn update_title(id: usize, title: String) -> BriefsResult<()>;
         fn verify_title(title: &String) -> BriefsResult<()>;
@@ -77,8 +76,19 @@ pub mod prelude {
     }
 
     pub trait DataBase {
-        fn insert_post(&self, post: &post::Post);
-        fn delete_post(&self, post: &post::Post);
-        fn modify_post(&self, post: &post::Post);
+        fn insert_post(&self, post: &post::Post) -> BriefsResult<()>;
+        fn delete_post(&self, id: usize) -> BriefsResult<()>;
+        fn modify_post(&self, post: &post::Post) -> BriefsResult<()>;
+        /// Used to retrieve the latest `N` Posts. Needed by the refresh_cache
+        /// functionality
+        ///
+        /// # Errors
+        ///
+        /// This function will return an error if .
+        fn get_n_posts(&self, n: usize) -> BriefsResult<Vec<post::Post>>;
+    }
+
+    pub trait Cache {
+        fn refresh_cache(&mut self) -> BriefsResult<()>;
     }
 }
