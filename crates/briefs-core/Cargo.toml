@@ -14,3 +14,4 @@ tokio = { version = "1.29.1", features = ["full"] }
 serde_json = "1.0.107"
 clap = { version = "4.4.6", features = ["derive"] }
 toml = { version = "0.8.2" }
+sqlite = { version = "0.36.1" }

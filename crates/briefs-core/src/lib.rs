@@ -5,6 +5,7 @@ mod error;
 pub mod post;
 pub mod state;
 pub mod stream;
+pub mod db;
 
 use std::fmt::Display;
 
