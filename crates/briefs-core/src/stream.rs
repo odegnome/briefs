@@ -34,7 +34,7 @@ impl Stream {
     /// Adds a new post to the current stream.
     pub fn add_post(&mut self, post: Post) -> BriefsResult<()> {
         self.increase_capacity()?;
-        if self.posts.len() == STREAM_CACHE_SIZE.into() {
+        if self.posts.len() == STREAM_CACHE_SIZE as usize {
             self.posts.pop_front();
             self.size -= 1;
         }

@@ -1,6 +1,10 @@
-use crate::post::Post;
+use crate::{post::Post, BriefsError};
 use sqlite::Connection;
-use std::path::PathBuf;
+use std::{path::PathBuf, process};
+use rand::{thread_rng, Rng};
+
+const DB_NAME: &str = "briefs-dev.db";
+pub const POSTS_TABLE: &str = "posts";
 
 pub trait DbInsertString {
     /// A trait for converting the underlying data into Db friendly
@@ -18,7 +22,7 @@ impl DbInsertString for Post {
         Ok(format!(
             "{},\"{}\",\"{}\",{},{}",
             self.id()
-                .map_err(|_| ServerError::custom_error("Unable to load post ID".into()))?,
+                .map_err(|_| BriefsError::custom_error("Unable to load post ID".into()))?,
             self.title,
             self.msg,
             self.date,
@@ -105,15 +109,60 @@ pub fn query_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result
     let mut result: Vec<sqlite::Row> = stmt.iter().filter_map(|val| val.ok()).collect();
 
     if result.len() == 0 {
-        return Err(ServerError::custom_error("Post not found with the given ID".into()).into());
+        return Err(BriefsError::custom_error("Post not found with the given ID".into()).into());
     } else if result.len() > 1 {
-        return Err(ServerError::custom_error(
+        return Err(BriefsError::custom_error(
             "BROKEN Db: Multiple posts found with the same ID".into(),
         )
         .into());
     }
 
     Ok(result.remove(0))
+}
+
+/// path - Can be either a complete file path(with .db suffix) or
+///        a directory name which will then be appended with default
+///        db name.
+pub fn setup_db(path: Option<PathBuf>) -> anyhow::Result<()> {
+    // Check if sqlite3 is installed
+    let sqlite3_check = process::Command::new("sqlite3")
+        .arg("-version")
+        .output()
+        .expect("sqlite3 not installed");
+
+    if !sqlite3_check.status.success() {
+        return Err(BriefsError::SqliteError {
+            msg: String::from_utf8(sqlite3_check.stderr)
+                .expect("Unable to parse sqlite3 error to string"),
+        }
+        .into());
+    };
+
+    println!(
+        "Found sqlite3: {}",
+        String::from_utf8(sqlite3_check.stdout).expect("Unable to parse sqlite3 stdout")
+    );
+
+    // Setup Db
+    match path {
+        Some(inner_path) => {
+            if !inner_path.try_exists()? || inner_path.is_dir() {
+                println!("{inner_path:?} does not exist or is a directory; creating a new db");
+
+                if !inner_path.to_str().unwrap().ends_with(".db") {
+                    create_db(inner_path.join(DB_NAME))?;
+                } else {
+                    create_db(inner_path)?;
+                }
+            }
+        }
+        None => {
+            let db_path = std::env::temp_dir().join(DB_NAME);
+            create_db(db_path)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// Generates a random db name with four 16-bit fields, such that when generating
@@ -142,10 +191,8 @@ pub fn generate_temp_db() -> PathBuf {
 
 #[cfg(test)]
 mod test {
-    use briefs_core::post::Post;
-    use sqlite::Value;
-
     use super::*;
+    use sqlite::Value;
 
     fn generate_random_db_name() -> String {
         let mut buffer = [0u16; 4];
@@ -199,10 +246,10 @@ mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = database::setup_tables(&mut conn);
+        let result = setup_tables(&mut conn);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_table_info(&mut conn, POSTS_TABLE);
+        let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         //----- Expected values
@@ -238,10 +285,10 @@ mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = database::setup_tables(&mut conn);
+        let result = setup_tables(&mut conn);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_table_info(&mut conn, POSTS_TABLE);
+        let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let mut conn = sqlite::open(path.clone()).unwrap();
@@ -251,10 +298,10 @@ mod test {
             "Hello there, this is my first post".into(),
         )
         .unwrap();
-        let result = database::insert_post(&mut conn, &post);
+        let result = insert_post(&mut conn, &post);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_posts(&mut conn, None);
+        let result = query_posts(&mut conn, None);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         //----- Expected values
@@ -297,10 +344,10 @@ mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = database::setup_tables(&mut conn);
+        let result = setup_tables(&mut conn);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_table_info(&mut conn, POSTS_TABLE);
+        let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let mut conn = sqlite::open(path.clone()).unwrap();
@@ -310,10 +357,10 @@ mod test {
             "Hello there, this is my first post".into(),
         )
         .unwrap();
-        let result = database::insert_post(&mut conn, &post);
+        let result = insert_post(&mut conn, &post);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_posts(&mut conn, None);
+        let result = query_posts(&mut conn, None);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         //----- Expected values
@@ -326,10 +373,10 @@ mod test {
 
         println!("{:?}", row_data);
 
-        let result = database::delete_post_by_id(&mut conn, 0);
+        let result = delete_post_by_id(&mut conn, 0);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
-        let result = database::query_posts(&mut conn, None);
+        let result = query_posts(&mut conn, None);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         //----- Expected values

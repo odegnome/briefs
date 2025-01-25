@@ -3,11 +3,9 @@ pub mod interfaces;
 
 pub use error::ServerError;
 
-use briefs_core::{Command, StreamCommand};
-use rand::{thread_rng, Rng};
-use sqlite;
+use briefs_core::{Command, StreamCommand, db::setup_db};
 use tokio_rustls::server::TlsStream;
-use std::{path::PathBuf, process};
+use std::path::PathBuf;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -16,7 +14,6 @@ use tokio::{
 
 /// 10Kb buffer
 const BUFFER_SIZE: usize = 10240;
-const DB_NAME: &str = "briefs-dev.db";
 pub const POSTS_TABLE: &str = "posts";
 
 pub mod interprocess {
@@ -53,55 +50,6 @@ pub mod interprocess {
     pub fn respond_with_bytes(responder: oneshot::Sender<Vec<u8>>, msg: Vec<u8>) {
         let _ = responder.send(msg);
     }
-}
-
-// pub mod database {
-//     use briefs_core::db::*;
-// }
-
-/// path - Can be either a complete file path(with .db suffix) or
-///        a directory name which will then be appended with default
-///        db name.
-pub fn setup_db(path: Option<PathBuf>) -> anyhow::Result<()> {
-    // Check if sqlite3 is installed
-    let sqlite3_check = process::Command::new("sqlite3")
-        .arg("-version")
-        .output()
-        .expect("sqlite3 not installed");
-
-    if !sqlite3_check.status.success() {
-        return Err(ServerError::SqliteError {
-            msg: String::from_utf8(sqlite3_check.stderr)
-                .expect("Unable to parse sqlite3 error to string"),
-        }
-        .into());
-    };
-
-    println!(
-        "Found sqlite3: {}",
-        String::from_utf8(sqlite3_check.stdout).expect("Unable to parse sqlite3 stdout")
-    );
-
-    // Setup Db
-    match path {
-        Some(inner_path) => {
-            if !inner_path.try_exists()? || inner_path.is_dir() {
-                println!("{inner_path:?} does not exist or is a directory; creating a new db");
-
-                if !inner_path.to_str().unwrap().ends_with(".db") {
-                    database::create_db(inner_path.join(DB_NAME))?;
-                } else {
-                    database::create_db(inner_path)?;
-                }
-            }
-        }
-        None => {
-            let db_path = std::env::temp_dir().join(DB_NAME);
-            database::create_db(db_path)?;
-        }
-    }
-
-    Ok(())
 }
 
 pub fn setup_server(db_path: Option<PathBuf>) -> anyhow::Result<()> {

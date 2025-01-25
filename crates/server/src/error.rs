@@ -3,9 +3,6 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ServerError {
     #[error("ERROR: {msg}")]
-    SqliteError { msg: String },
-
-    #[error("ERROR: {msg}")]
     CustomError { msg: String },
 }
 
