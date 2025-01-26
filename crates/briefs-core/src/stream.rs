@@ -1,8 +1,11 @@
+use sqlite::Connection;
+
 use crate::{
     constant::STREAM_CACHE_SIZE,
+    db,
     post::{time_in_sec, Post},
     state::{CatchUpResponse, StreamMetadata},
-    BriefsResult, BriefsError,
+    BriefsError, BriefsResult,
 };
 use std::{collections::VecDeque, fmt::Display, time::SystemTime};
 
@@ -32,8 +35,8 @@ impl Stream {
     // ***
 
     /// Adds a new post to the current stream.
-    pub fn add_post(&mut self, post: Post) -> BriefsResult<()> {
-        self.increase_capacity()?;
+    pub fn add_post(&mut self, conn: &mut Connection, post: Post) -> BriefsResult<()> {
+        db::insert_post(conn, &post)?;
         if self.posts.len() == STREAM_CACHE_SIZE as usize {
             self.posts.pop_front();
             self.size -= 1;
@@ -45,7 +48,8 @@ impl Stream {
     }
 
     /// Removes an existing post from the stream.
-    pub fn remove_post(&mut self, id: usize) -> BriefsResult<()> {
+    pub fn remove_post(&mut self, conn: &mut Connection, id: usize) -> BriefsResult<()> {
+        db::delete_post_by_id(conn, id)?;
         let idx = self.post_id_to_idx(id)?;
         self.posts.remove(idx);
         self.size = self.posts.len();
@@ -54,7 +58,7 @@ impl Stream {
     }
 
     /// Update an existing post with the new message.
-    pub fn update_msg(&mut self, id: usize, new_msg: String) -> BriefsResult<()> {
+    pub fn update_msg(&mut self, conn: &mut Connection, id: usize, new_msg: String) -> BriefsResult<()> {
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
@@ -65,7 +69,7 @@ impl Stream {
     }
 
     /// Update an existing post with the new title.
-    pub fn update_title(&mut self, id: usize, new_title: String) -> BriefsResult<()> {
+    pub fn update_title(&mut self, conn: &mut Connection, id: usize, new_title: String) -> BriefsResult<()> {
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
@@ -79,6 +83,7 @@ impl Stream {
     #[allow(unused_assignments)]
     pub fn catchup(
         &self,
+        conn: &Connection,
         start_index: usize,
         mut end_index: usize,
     ) -> BriefsResult<CatchUpResponse> {
@@ -107,7 +112,7 @@ impl Stream {
     }
 
     /// Return a specific post.
-    pub fn get_post(&self, id: usize) -> Option<&Post> {
+    pub fn get_post(&self, conn: &Connection, id: usize) -> Option<&Post> {
         let result = self.post_id_to_idx(id);
         match result {
             Ok(post_idx) => self.posts.get(post_idx),
@@ -161,14 +166,6 @@ impl Stream {
     /// Get the date of inception/creation of the stream
     pub fn date_of_inception(&self) -> u64 {
         self.date_of_inception
-    }
-
-    /// Increase the capacity of the stream by 50
-    fn increase_capacity(&mut self) -> BriefsResult<()> {
-        if self.posts.capacity() <= 10 {
-            return Ok(());
-        };
-        Ok(self.posts.try_reserve(STREAM_CACHE_SIZE.into())?)
     }
 
     /// Returns the index of post, with the associated ID, in the posts vector.
