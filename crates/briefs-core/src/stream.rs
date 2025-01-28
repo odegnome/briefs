@@ -59,6 +59,7 @@ impl Stream {
 
     /// Update an existing post with the new message.
     pub fn update_msg(&mut self, conn: &mut Connection, id: usize, new_msg: String) -> BriefsResult<()> {
+        db::update_post_msg_by_id(conn, id, new_msg.clone())?;
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
@@ -70,6 +71,7 @@ impl Stream {
 
     /// Update an existing post with the new title.
     pub fn update_title(&mut self, conn: &mut Connection, id: usize, new_title: String) -> BriefsResult<()> {
+        db::update_post_title_by_id(conn, id, new_title.clone())?;
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts

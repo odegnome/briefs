@@ -1,7 +1,7 @@
 use crate::{post::Post, BriefsError};
+use rand::{thread_rng, Rng};
 use sqlite::Connection;
 use std::{path::PathBuf, process};
-use rand::{thread_rng, Rng};
 
 const DB_NAME: &str = "briefs-dev.db";
 pub const POSTS_TABLE: &str = "posts";
@@ -78,6 +78,22 @@ pub fn insert_post(conn: &mut Connection, data: &Post) -> anyhow::Result<()> {
 
 pub fn delete_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result<()> {
     let statement = format!("DELETE FROM {} WHERE id={}", POSTS_TABLE, post_id);
+
+    conn.execute(statement)?;
+
+    Ok(())
+}
+
+pub fn update_post_title_by_id(conn: &mut Connection, post_id: usize, title: String) -> anyhow::Result<()> {
+    let statement = format!("UPDATE {} SET title = \"{}\" WHERE id={}", POSTS_TABLE, title, post_id);
+
+    conn.execute(statement)?;
+
+    Ok(())
+}
+
+pub fn update_post_msg_by_id(conn: &mut Connection, post_id: usize, msg: String) -> anyhow::Result<()> {
+    let statement = format!("UPDATE {} SET msg = \"{}\" WHERE id={}", POSTS_TABLE, msg, post_id);
 
     conn.execute(statement)?;
 
@@ -193,19 +209,6 @@ pub fn generate_temp_db() -> PathBuf {
 mod test {
     use super::*;
     use sqlite::Value;
-
-    fn generate_random_db_name() -> String {
-        let mut buffer = [0u16; 4];
-        thread_rng().fill(&mut buffer);
-        let mut result = buffer
-            .into_iter()
-            .map(|val| format!("{:05}", val.to_be()))
-            .collect::<Vec<String>>()
-            .join("-");
-        result.insert_str(0, "briefs-");
-        result.push_str(".db");
-        result
-    }
 
     #[test]
     fn test_generate_random_db_name() {
@@ -386,6 +389,120 @@ mod test {
         let row_data = result.unwrap();
         let actual_rows = row_data.len();
         assert_eq!(actual_rows, expected_rows);
+
+        std::fs::remove_file(path).expect("Db cleanup failed");
+    }
+
+    #[test]
+    fn test_update_post_title() {
+        let db_name = generate_random_db_name();
+        let path = std::env::temp_dir().join(db_name.clone());
+        setup_db(Some(path.clone())).unwrap();
+
+        assert!(path.exists(), "Db creation failed at expected path");
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let result = setup_tables(&mut conn);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_table_info(&mut conn, POSTS_TABLE);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let post = Post::new(
+            0,
+            "Post #1".into(),
+            "Hello there, this is my first post".into(),
+        )
+        .unwrap();
+        let result = insert_post(&mut conn, &post);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 1;
+        //-----
+
+        let row_data = result.unwrap();
+        let actual_rows = row_data.len();
+        assert_eq!(actual_rows, expected_rows);
+        println!("{:?}", row_data);
+
+        let new_title = String::from("Updated Title!");
+        let result = update_post_title_by_id(&mut conn, 0, new_title.clone());
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 1;
+        let expected_title = sqlite::Value::String(new_title);
+        //-----
+        let mut row_data = result.unwrap();
+        assert_eq!(row_data.len(), expected_rows);
+
+        let post_title = row_data[0].take("title");
+        assert_eq!(post_title, expected_title);
+
+        std::fs::remove_file(path).expect("Db cleanup failed");
+    }
+
+    #[test]
+    fn test_update_post_msg() {
+        let db_name = generate_random_db_name();
+        let path = std::env::temp_dir().join(db_name.clone());
+        setup_db(Some(path.clone())).unwrap();
+
+        assert!(path.exists(), "Db creation failed at expected path");
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let result = setup_tables(&mut conn);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_table_info(&mut conn, POSTS_TABLE);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let mut conn = sqlite::open(path.clone()).unwrap();
+        let post = Post::new(
+            0,
+            "Post #1".into(),
+            "Hello there, this is my first post".into(),
+        )
+        .unwrap();
+        let result = insert_post(&mut conn, &post);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 1;
+        //-----
+
+        let row_data = result.unwrap();
+        let actual_rows = row_data.len();
+        assert_eq!(actual_rows, expected_rows);
+        println!("{:?}", row_data);
+
+        let new_msg = String::from("This is a new updated msg. Interesting?");
+        let result = update_post_msg_by_id(&mut conn, 0, new_msg.clone());
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        let result = query_posts(&mut conn, None);
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        //----- Expected values
+        let expected_rows = 1;
+        let expected_msg = sqlite::Value::String(new_msg);
+        //-----
+        let mut row_data = result.unwrap();
+        assert_eq!(row_data.len(), expected_rows);
+
+        let post_msg = row_data[0].take("msg");
+        assert_eq!(post_msg, expected_msg);
 
         std::fs::remove_file(path).expect("Db cleanup failed");
     }

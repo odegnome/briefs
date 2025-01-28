@@ -49,7 +49,7 @@ async fn main() {
                         continue;
                     }
                     let new_post = new_post.unwrap();
-                    let result = stream.add_post(new_post.clone());
+                    let result = stream.add_post(&mut conn, new_post.clone());
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -104,7 +104,7 @@ async fn main() {
                     };
 
                     // Catchup
-                    let response = stream.catchup(last_fetch_id, limit_index);
+                    let response = stream.catchup(&mut conn, last_fetch_id, limit_index);
                     if response.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -155,7 +155,7 @@ async fn main() {
                 }
 
                 Command::Get { id } => {
-                    let result = stream.get_post(id);
+                    let result = stream.get_post(&mut conn, id);
                     if result.is_none() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -172,7 +172,7 @@ async fn main() {
                 }
 
                 Command::Delete { id } => {
-                    let result = stream.remove_post(id);
+                    let result = stream.remove_post(&mut conn, id);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -203,7 +203,7 @@ async fn main() {
                 }
 
                 Command::UpdateMsg { id, msg } => {
-                    let result = stream.update_msg(id, msg);
+                    let result = stream.update_msg(&mut conn, id, msg);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -225,7 +225,7 @@ async fn main() {
                 }
 
                 Command::UpdateTitle { id, title } => {
-                    let result = stream.update_title(id, title);
+                    let result = stream.update_title(&mut conn, id, title);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
