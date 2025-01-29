@@ -136,6 +136,23 @@ pub fn query_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result
     Ok(result.remove(0))
 }
 
+pub fn query_last_n(
+    conn: &mut Connection,
+    n: u32,
+) -> anyhow::Result<Vec<sqlite::Row>> {
+    let statement = format!(
+        "SELECT * FROM {} ORDER BY id DESC LIMIT {};",
+        POSTS_TABLE,
+        n
+    );
+
+    let mut stmt = conn.prepare(statement)?;
+
+    let result: Vec<sqlite::Row> = stmt.iter().filter_map(|val| val.ok()).collect();
+
+    Ok(result)
+}
+
 /// path - Can be either a complete file path(with .db suffix) or
 ///        a directory name which will then be appended with default
 ///        db name.

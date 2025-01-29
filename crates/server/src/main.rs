@@ -62,20 +62,6 @@ async fn main() {
                         continue;
                     }
 
-                    // Insert into db
-                    let result = briefs_core::db::insert_post(&mut conn, &new_post);
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "ERROR during create: {:?}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-
                     respond_with_bytes(
                         resp.unwrap(),
                         serde_json::to_vec(&StreamResponse::new(format!(
@@ -131,24 +117,6 @@ async fn main() {
                         continue;
                     }
 
-                    // Update database
-                    let result = briefs_core::db::query_posts(&mut conn, None);
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "An error occured: {:?}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-                    let rows = result.unwrap();
-                    for row in rows.iter() {
-                        println!("{:?}", row);
-                    }
-
                     resp.unwrap().send(response.unwrap()).unwrap();
 
                     //resp.unwrap().send(format!("{}", &stream)).unwrap();
@@ -178,20 +146,6 @@ async fn main() {
                             resp.unwrap(),
                             serde_json::to_vec(&StreamResponse::new(format!(
                                 "ERROR during delete: {}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-
-                    // Delete from db
-                    let result = briefs_core::db::delete_post_by_id(&mut conn, id);
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "ERROR during delete: {:?}",
                                 result.unwrap_err()
                             )))
                             .unwrap(),
