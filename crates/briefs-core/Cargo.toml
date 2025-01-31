@@ -11,6 +11,10 @@ description.workspace = true
 textwrap = { version = "0.16.0", features = ["default"] }
 serde = { version = "1.0.163", features = ["derive"] }
 tokio = { version = "1.29.1", features = ["full"] }
-serde_json = "1.0.107"
+serde_json = { version = "1.0.107"}
 clap = { version = "4.4.6", features = ["derive"] }
 toml = { version = "0.8.2" }
+sqlite = { version = "0.36.1" }
+anyhow = "1.0.89"
+thiserror = "2.0.3"
+rand = "0.8.5"

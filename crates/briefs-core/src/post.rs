@@ -51,6 +51,43 @@ impl Post {
     pub fn id(&self) -> BriefsResult<usize> {
         Ok(self.id)
     }
+
+    pub fn parse_sqlite_row(mut record: sqlite::Row) -> BriefsResult<Self> {
+        let mut post = Post {
+            id: 0,
+            title: String::new(),
+            msg: String::new(),
+            date: 0,
+            edited: false,
+        };
+
+        match record.take("id") {
+            sqlite::Value::Integer(val) => post.id = val.try_into()?,
+            _ => return Err(BriefsError::SqliteValueParseError.into()),
+        };
+
+        match record.take("title") {
+            sqlite::Value::String(val) => post.title = val,
+            _ => return Err(BriefsError::SqliteValueParseError.into()),
+        };
+
+        match record.take("msg") {
+            sqlite::Value::String(val) => post.msg = val,
+            _ => return Err(BriefsError::SqliteValueParseError.into()),
+        };
+
+        match record.take("date") {
+            sqlite::Value::Integer(val) => post.date = val.try_into()?,
+            _ => return Err(BriefsError::SqliteValueParseError.into()),
+        };
+
+        match record.take("edited") {
+            sqlite::Value::Integer(val) => post.edited = val != 0, // 0: false, 1: true; in sqlite
+            _ => return Err(BriefsError::SqliteValueParseError.into()),
+        };
+
+        Ok(post)
+    }
 }
 
 pub(crate) fn time_in_sec(time: SystemTime) -> BriefsResult<u64> {
@@ -107,7 +144,12 @@ impl Display for Post {
             } else {
                 0
             };
-            write!(f, "{left_closure}{}{}{right_closure}\n", line, " ".repeat(whitespace))?;
+            write!(
+                f,
+                "{left_closure}{}{}{right_closure}\n",
+                line,
+                " ".repeat(whitespace)
+            )?;
             count += 1;
         }
         write!(f, "{:-<54}", "")

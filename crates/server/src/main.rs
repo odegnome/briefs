@@ -6,11 +6,11 @@ use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
-use briefs_core::{post, stream, Command, StreamCommand, StreamResponse};
+use briefs_core::{post, stream, Command, StreamCommand, StreamResponse, db::generate_temp_db};
 
 use server::{
-    database, generate_temp_db, handle_conn_request,
-    interprocess::{respond_with_bytes, respond_with_string},
+    handle_conn_request,
+    interprocess::respond_with_bytes,
     setup_server,
 };
 
@@ -28,7 +28,7 @@ async fn main() {
         let mut stream = stream::Stream::default();
         setup_server(Some(db_path.clone().into())).expect("Unable to setup db");
         let mut conn = sqlite::open(db_path).expect("Unable to open connection");
-        database::setup_tables(&mut conn).expect("Unable to setup tables");
+        briefs_core::db::setup_tables(&mut conn).expect("Unable to setup tables");
 
         //-------
         // Handle requets from conn handler
@@ -49,21 +49,7 @@ async fn main() {
                         continue;
                     }
                     let new_post = new_post.unwrap();
-                    let result = stream.add_post(new_post.clone());
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "ERROR during create: {:?}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-
-                    // Insert into db
-                    let result = database::insert_post(&mut conn, &new_post);
+                    let result = stream.add_post(&mut conn, new_post.clone());
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -104,7 +90,7 @@ async fn main() {
                     };
 
                     // Catchup
-                    let response = stream.catchup(last_fetch_id, limit_index);
+                    let response = stream.catchup(&mut conn, last_fetch_id, limit_index);
                     if response.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -131,31 +117,13 @@ async fn main() {
                         continue;
                     }
 
-                    // Update database
-                    let result = database::query_posts(&mut conn, None);
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "An error occured: {:?}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-                    let rows = result.unwrap();
-                    for row in rows.iter() {
-                        println!("{:?}", row);
-                    }
-
                     resp.unwrap().send(response.unwrap()).unwrap();
 
                     //resp.unwrap().send(format!("{}", &stream)).unwrap();
                 }
 
                 Command::Get { id } => {
-                    let result = stream.get_post(id);
+                    let result = stream.get_post(&mut conn, id);
                     if result.is_none() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -172,7 +140,7 @@ async fn main() {
                 }
 
                 Command::Delete { id } => {
-                    let result = stream.remove_post(id);
+                    let result = stream.remove_post(&mut conn, id);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -185,25 +153,11 @@ async fn main() {
                         continue;
                     }
 
-                    // Delete from db
-                    let result = database::delete_post_by_id(&mut conn, id);
-                    if result.is_err() {
-                        respond_with_bytes(
-                            resp.unwrap(),
-                            serde_json::to_vec(&StreamResponse::new(format!(
-                                "ERROR during delete: {:?}",
-                                result.unwrap_err()
-                            )))
-                            .unwrap(),
-                        );
-                        continue;
-                    }
-
                     respond_with_bytes(resp.unwrap(), format!("Succesfully deleted post").into());
                 }
 
                 Command::UpdateMsg { id, msg } => {
-                    let result = stream.update_msg(id, msg);
+                    let result = stream.update_msg(&mut conn, id, msg);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -225,7 +179,7 @@ async fn main() {
                 }
 
                 Command::UpdateTitle { id, title } => {
-                    let result = stream.update_title(id, title);
+                    let result = stream.update_title(&mut conn, id, title);
                     if result.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),

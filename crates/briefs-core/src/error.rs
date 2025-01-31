@@ -1,67 +1,52 @@
-use std::error::Error;
-use std::fmt::Display;
+use thiserror::Error;
 
-pub type BriefsResult<T> = Result<T, Box<dyn Error>>;
+pub type BriefsResult<T> = anyhow::Result<T>;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Error, Debug)]
 pub enum BriefsError {
     /// An empty title was provided for the post.
+    #[error("Title cannot be empty")]
     EmptyTitle,
     /// An empty message was provided for the post.
+    #[error("Post cannot be empty")]
     EmptyPost,
     /// The title length exceeds the maximum length.
+    #[error("Max allowed size of title: {max_size}, current size: {curr_size}")]
     InvalidTitleLength {
         max_size: usize,
         curr_size: usize,
     },
     /// The post length exceeds the maximum length.
+    #[error("Max allowed size of post: {max_size}, current size: {curr_size}")]
     InvalidPostLength {
         max_size: usize,
         curr_size: usize,
     },
     /// The requested/specified index is Out Of Bounds.
+    #[error("The index({given_index}) is greater than posts count({posts_count})")]
     InvalidIndex {
         posts_count: usize,
         given_index: usize,
     },
     /// The requested/specified ID does not exist.
+    #[error("Post does not exist with the given ID")]
     InvalidId {},
+    /// An error occured in a sqlite operation. This is just
+    /// a wrapper around the error message.
+    #[error("ERROR: {msg}")]
+    SqliteError { msg: String },
+    /// Parsing of sqlite::Value into required type failed.
+    #[error("ERROR: Unable to parse input sqlite `Value` into required type")]
+    SqliteValueParseError,
     /// Custom Error type for errors not covered by the above errors.
+    #[error("{msg}")]
     CustomError {
         msg: String,
     },
 }
 
-impl Error for BriefsError {}
-
-impl Display for BriefsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BriefsError::EmptyTitle => writeln!(f, "Title cannot be empty"),
-            BriefsError::EmptyPost => writeln!(f, "Post cannot be empty"),
-            BriefsError::InvalidTitleLength {
-                max_size,
-                curr_size,
-            } => writeln!(
-                f,
-                "Max allowed size of title: {max_size}, current size: {curr_size}"
-            ),
-            BriefsError::InvalidPostLength {
-                max_size,
-                curr_size,
-            } => writeln!(
-                f,
-                "Max allowed size of post: {max_size}, current size: {curr_size}"
-            ),
-            BriefsError::InvalidIndex {
-                posts_count,
-                given_index,
-            } => writeln!(
-                f,
-                "The index({given_index}) is greater than posts count({posts_count})"
-            ),
-            BriefsError::CustomError { msg } => writeln!(f, "{:?}", msg),
-            BriefsError::InvalidId { } => writeln!(f, "Post does not exist with the given ID" ),
-        }
+impl BriefsError {
+    pub fn custom_error(msg: String) -> Self {
+        Self::CustomError { msg }
     }
 }
