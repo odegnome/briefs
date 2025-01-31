@@ -31,8 +31,13 @@ pub enum BriefsError {
     /// The requested/specified ID does not exist.
     #[error("Post does not exist with the given ID")]
     InvalidId {},
+    /// An error occured in a sqlite operation. This is just
+    /// a wrapper around the error message.
     #[error("ERROR: {msg}")]
     SqliteError { msg: String },
+    /// Parsing of sqlite::Value into required type failed.
+    #[error("ERROR: Unable to parse input sqlite `Value` into required type")]
+    SqliteValueParseError,
     /// Custom Error type for errors not covered by the above errors.
     #[error("{msg}")]
     CustomError {

@@ -153,6 +153,17 @@ pub fn query_last_n(
     Ok(result)
 }
 
+pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> anyhow::Result<Vec<Post>> {
+    let mut result = Vec::with_capacity(records.len());
+    for row in records.into_iter() {
+        let post = Post::parse_sqlite_row(row)?;
+        result.push(post);
+    }
+
+    Ok(result)
+
+}
+
 /// path - Can be either a complete file path(with .db suffix) or
 ///        a directory name which will then be appended with default
 ///        db name.

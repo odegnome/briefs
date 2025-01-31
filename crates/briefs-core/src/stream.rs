@@ -58,7 +58,12 @@ impl Stream {
     }
 
     /// Update an existing post with the new message.
-    pub fn update_msg(&mut self, conn: &mut Connection, id: usize, new_msg: String) -> BriefsResult<()> {
+    pub fn update_msg(
+        &mut self,
+        conn: &mut Connection,
+        id: usize,
+        new_msg: String,
+    ) -> BriefsResult<()> {
         db::update_post_msg_by_id(conn, id, new_msg.clone())?;
         let post_id = self.post_id_to_idx(id)?;
         let post = self
@@ -70,7 +75,12 @@ impl Stream {
     }
 
     /// Update an existing post with the new title.
-    pub fn update_title(&mut self, conn: &mut Connection, id: usize, new_title: String) -> BriefsResult<()> {
+    pub fn update_title(
+        &mut self,
+        conn: &mut Connection,
+        id: usize,
+        new_title: String,
+    ) -> BriefsResult<()> {
         db::update_post_title_by_id(conn, id, new_title.clone())?;
         let post_id = self.post_id_to_idx(id)?;
         let post = self
@@ -130,14 +140,17 @@ impl Stream {
         })
     }
 
+    /// Refresh the internal cache from Db.
+    pub fn refresh_cache(&mut self, conn: &mut Connection) -> BriefsResult<()> {
+        self.posts.clear();
+        let n_posts = db::query_last_n(conn, self.size.try_into()?)?;
+        self.posts = db::sqlite_to_post(n_posts)?.into();
+        Ok(())
+    }
+
     // ***
     // Helpers
     // ***
-
-    pub fn refresh_cache(&mut self) -> BriefsResult<()> {
-        self.posts.clear();
-        todo!();
-    }
 
     /// Get the index of a post in `posts`. The argument specifies
     /// the index of the post from the last post. This return the index from
