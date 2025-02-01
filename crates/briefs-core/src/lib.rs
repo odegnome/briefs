@@ -53,11 +53,21 @@ impl Display for StreamResponse {
     }
 }
 
+#[allow(dead_code)]
 pub mod prelude {
     use crate::post;
     use std::time::SystemTime;
 
     use crate::BriefsResult;
+
+    /// This is a potential Response type to be used by stream handler
+    /// to respond with to the client. This is needed because in current
+    /// state, the cli will be unable to deserialize the data, if there
+    /// is an error, as it references a different data struct for serde.
+    pub struct StreamResponse<D, E> {
+        data: D,
+        error: E
+    }
 
     pub trait CatchupStream {
         fn insert_post(&mut self, post: post::Post) -> BriefsResult<()>;

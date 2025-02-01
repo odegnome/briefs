@@ -84,16 +84,30 @@ pub fn delete_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Resul
     Ok(())
 }
 
-pub fn update_post_title_by_id(conn: &mut Connection, post_id: usize, title: String) -> anyhow::Result<()> {
-    let statement = format!("UPDATE {} SET title = \"{}\" WHERE id={}", POSTS_TABLE, title, post_id);
+pub fn update_post_title_by_id(
+    conn: &mut Connection,
+    post_id: usize,
+    title: String,
+) -> anyhow::Result<()> {
+    let statement = format!(
+        "UPDATE {} SET title = \"{}\" WHERE id={}",
+        POSTS_TABLE, title, post_id
+    );
 
     conn.execute(statement)?;
 
     Ok(())
 }
 
-pub fn update_post_msg_by_id(conn: &mut Connection, post_id: usize, msg: String) -> anyhow::Result<()> {
-    let statement = format!("UPDATE {} SET msg = \"{}\" WHERE id={}", POSTS_TABLE, msg, post_id);
+pub fn update_post_msg_by_id(
+    conn: &mut Connection,
+    post_id: usize,
+    msg: String,
+) -> anyhow::Result<()> {
+    let statement = format!(
+        "UPDATE {} SET msg = \"{}\" WHERE id={}",
+        POSTS_TABLE, msg, post_id
+    );
 
     conn.execute(statement)?;
 
@@ -117,7 +131,7 @@ pub fn query_posts(
     Ok(result)
 }
 
-pub fn query_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result<sqlite::Row> {
+pub fn query_post_by_id(conn: &Connection, post_id: usize) -> anyhow::Result<sqlite::Row> {
     let statement = format!("SELECT * FROM {} WHERE id={}", POSTS_TABLE, post_id);
 
     let mut stmt = conn.prepare(statement)?;
@@ -136,14 +150,27 @@ pub fn query_post_by_id(conn: &mut Connection, post_id: usize) -> anyhow::Result
     Ok(result.remove(0))
 }
 
-pub fn query_last_n(
-    conn: &mut Connection,
-    n: u32,
-) -> anyhow::Result<Vec<sqlite::Row>> {
+pub fn query_last_n(conn: &mut Connection, n: u32) -> anyhow::Result<Vec<sqlite::Row>> {
     let statement = format!(
         "SELECT * FROM {} ORDER BY id DESC LIMIT {};",
-        POSTS_TABLE,
-        n
+        POSTS_TABLE, n
+    );
+
+    let mut stmt = conn.prepare(statement)?;
+
+    let result: Vec<sqlite::Row> = stmt.iter().filter_map(|val| val.ok()).collect();
+
+    Ok(result)
+}
+
+pub fn catchup(
+    conn: &Connection,
+    sid: u64,
+    eid: u64,
+) -> anyhow::Result<Vec<sqlite::Row>> {
+    let statement = format!(
+        "SELECT * FROM {} WHERE id >= {} AND id <= {}",
+        POSTS_TABLE, sid, eid
     );
 
     let mut stmt = conn.prepare(statement)?;
@@ -161,7 +188,6 @@ pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> anyhow::Result<Vec<Post>> {
     }
 
     Ok(result)
-
 }
 
 /// path - Can be either a complete file path(with .db suffix) or
