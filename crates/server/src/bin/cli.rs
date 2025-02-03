@@ -152,8 +152,11 @@ async fn briefs(
             //         msg: "Unable to decode UTF-8".into(),
             //     }
             // })?;
-            let response = serde_json::from_slice::<crate::CatchUpResponse>(&kb_buffer[..bytes])?;
-            // let response = serde_json::from_str::<crate::CatchUpResponse>(&response)?;
+            let response = serde_json::from_slice::<crate::CatchUpResponse>(&kb_buffer[..bytes]);
+            if response.is_err() {
+                println!("{:?}", serde_json::from_slice::<crate::StreamResponse>(&kb_buffer[..bytes]));
+            }
+            let response = response.unwrap();
             if !json {
                 println!("caught_up: {}", response.caught_up);
                 for post in response.posts.into_iter() {

@@ -14,6 +14,7 @@ use std::{collections::VecDeque, fmt::Display, time::SystemTime};
 pub struct Stream {
     posts: VecDeque<Post>,
     size: usize,
+    nposts: u64,
     last_updated: u64,
     date_of_inception: u64,
 }
@@ -23,6 +24,7 @@ impl Default for Stream {
         Stream {
             posts: VecDeque::with_capacity(STREAM_CACHE_SIZE.into()),
             size: 0,
+            nposts: 0,
             date_of_inception: time_in_sec(SystemTime::now()).unwrap(),
             last_updated: time_in_sec(SystemTime::now()).unwrap(),
         }
@@ -44,16 +46,21 @@ impl Stream {
         self.posts.push_back(post);
         self.size += 1;
         self.last_updated = time_in_sec(SystemTime::now())?;
+        self.increment_post_count()?;
         Ok(())
     }
 
     /// Removes an existing post from the stream.
     pub fn remove_post(&mut self, conn: &mut Connection, id: usize) -> BriefsResult<()> {
         db::delete_post_by_id(conn, id)?;
+        self.last_updated = time_in_sec(SystemTime::now())?;
+        self.decrement_post_count()?;
+        if !self.id_in_cache(id) {
+            return Ok(());
+        }
         let idx = self.post_id_to_idx(id)?;
         self.posts.remove(idx);
         self.size = self.posts.len();
-        self.last_updated = time_in_sec(SystemTime::now())?;
         Ok(())
     }
 
@@ -65,12 +72,15 @@ impl Stream {
         new_msg: String,
     ) -> BriefsResult<()> {
         db::update_post_msg_by_id(conn, id, new_msg.clone())?;
-        let post_id = self.post_id_to_idx(id)?;
+        self.last_updated = time_in_sec(SystemTime::now())?;
+        if !self.id_in_cache(id) {
+            return Ok(());
+        }
+        let idx = self.post_id_to_idx(id)?;
         let post = self
             .posts
-            .get_mut(post_id)
+            .get_mut(idx)
             .ok_or_else(|| BriefsError::InvalidId {})?;
-        self.last_updated = time_in_sec(SystemTime::now())?;
         post.update_msg(new_msg)
     }
 
@@ -82,59 +92,76 @@ impl Stream {
         new_title: String,
     ) -> BriefsResult<()> {
         db::update_post_title_by_id(conn, id, new_title.clone())?;
+        self.last_updated = time_in_sec(SystemTime::now())?;
+        if !self.id_in_cache(id) {
+            return Ok(());
+        }
         let post_id = self.post_id_to_idx(id)?;
         let post = self
             .posts
             .get_mut(post_id)
             .ok_or_else(|| BriefsError::InvalidId {})?;
-        self.last_updated = time_in_sec(SystemTime::now())?;
         post.update_title(new_title)
     }
 
-    /// Return the latest posts.
-    #[allow(unused_assignments)]
+    /// Return latest posts since last fetch.
     pub fn catchup(
         &self,
         conn: &Connection,
-        start_index: usize,
-        mut end_index: usize,
+        sid: usize,
+        mut eid: usize,
     ) -> BriefsResult<CatchUpResponse> {
-        let mut caught_up = false;
-        end_index = if self.size() <= end_index {
-            caught_up = true;
-            self.size()
-        } else {
-            end_index
+        let mut response = CatchUpResponse {
+            posts: Vec::new(),
+            caught_up: true,
         };
-        if self
-            .posts
-            .binary_search_by_key(&start_index, |val| val.id().unwrap())
-            .is_err()
-        {
-            // !-------
-            // Fetch result from the db
-            // -------!
-            todo!()
+        if self.posts.is_empty() {
+            return Ok(response);
         }
-        let response = CatchUpResponse {
-            posts: self.posts.clone().into(),
-            caught_up,
+
+        let mut caught_up = false;
+        let last_id = self.posts.back().unwrap().id().unwrap();
+        
+        if last_id < sid {
+            return Ok(response);
+        }
+
+        eid = if last_id <= eid {
+            caught_up = true;
+            last_id
+        } else {
+            eid
         };
+        if self.id_in_cache(sid) {
+            // use cache
+            let sidx = self.post_id_to_idx(sid)?;
+            let eidx = self.post_id_to_idx(eid)?;
+            response.posts = self.posts.range(sidx..=eidx).cloned().collect();
+            response.caught_up = caught_up;
+            return Ok(response);
+        }
+        // use db
+        let records = db::catchup(conn, sid.try_into()?, eid.try_into()?)?;
+        response.posts = db::sqlite_to_post(records)?;
+        response.caught_up = caught_up;
         Ok(response)
     }
 
     /// Return a specific post.
-    pub fn get_post(&self, conn: &Connection, id: usize) -> Option<&Post> {
+    pub fn get_post(&self, conn: &Connection, id: usize) -> Option<Post> {
         let result = self.post_id_to_idx(id);
         match result {
-            Ok(post_idx) => self.posts.get(post_idx),
-            Err(_) => None,
+            Ok(idx) => self.posts.get(idx).cloned(),
+            Err(_) => match db::query_post_by_id(conn, id) {
+                Ok(val) => Post::parse_sqlite_row(val).ok(),
+                Err(_) => None,
+            },
         }
     }
 
     pub fn stream_metadata(&self) -> BriefsResult<StreamMetadata> {
         Ok(StreamMetadata {
-            posts_count: self.size(),
+            posts_count: self.nposts as usize,
             last_updated: self.last_updated,
             latest_post_id: self.posts.back().map(|val| val.id().unwrap()),
         })
@@ -151,21 +178,27 @@ impl Stream {
     // ***
     // Helpers
     // ***
+    
+    fn increment_post_count(&mut self) -> BriefsResult<()> {
+        self.nposts += 1;
+        Ok(())
+    }
 
-    /// Get the index of a post in `posts`. The argument specifies
-    /// the index of the post from the last post. This return the index from
-    /// the start.
-    #[allow(dead_code)]
-    fn get_post_index(&self, index: &usize) -> BriefsResult<usize> {
-        let posts_count = self.posts.len();
-        if *index > posts_count {
-            return Err(BriefsError::InvalidIndex {
-                posts_count,
-                given_index: *index,
-            }
-            .into());
+    fn decrement_post_count(&mut self) -> BriefsResult<()> {
+        self.nposts = self.nposts.saturating_sub(1);
+        Ok(())
+    }
+
+    fn id_in_cache(&self, index: usize) -> bool {
+        if self.posts.is_empty() {
+            false
+        } else if index < self.posts.front().unwrap().id().unwrap_or_default() {
+            false
+        } else if index > self.posts.back().unwrap().id().unwrap_or_default() {
+            false
+        } else {
+            true
         }
-        Ok(posts_count - index)
     }
 
     /// Get the last time the stream was updated
@@ -175,7 +208,7 @@ impl Stream {
 
     /// Get the number of posts in stream
     pub fn size(&self) -> usize {
-        self.size
+        self.nposts as usize
     }
 
     /// Get the date of inception/creation of the stream
@@ -185,6 +218,9 @@ impl Stream {
 
     /// Returns the index of post, with the associated ID, in the posts vector.
     fn post_id_to_idx(&self, id: usize) -> BriefsResult<usize> {
+        if self.posts.is_empty() {
+            return Err(BriefsError::InvalidId {}.into());
+        }
         let mut start = 0;
         let mut end = self.posts.len() - 1;
         let mut mid = (end + start) / 2;
