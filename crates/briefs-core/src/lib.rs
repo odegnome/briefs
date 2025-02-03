@@ -6,6 +6,7 @@ pub mod post;
 pub mod state;
 pub mod stream;
 pub mod db;
+pub mod config_file;
 
 use std::fmt::Display;
 
