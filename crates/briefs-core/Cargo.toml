@@ -18,3 +18,4 @@ sqlite = { version = "0.36.1" }
 anyhow = "1.0.89"
 thiserror = "2.0.3"
 rand = "0.8.5"
+home = "0.5.11"
