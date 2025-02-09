@@ -1,10 +1,12 @@
 use home::home_dir;
 use std::{
+    io::Write,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 
 const CONFIG_DIR: &str = ".briefs";
+const CONFIG_FILE: &str = "briefs.toml";
 
 pub struct BriefsConfig {
     /// Socket address used to serve. Should be <ip>:<port>
@@ -17,6 +19,8 @@ pub struct BriefsConfig {
     /// Path to sqlite Db.
     /// Optional
     pub db: PathBuf,
+    /// Path of the config file; eg $HOME/.config/
+    pub dirpath: PathBuf,
 }
 
 impl Default for BriefsConfig {
@@ -29,6 +33,7 @@ impl Default for BriefsConfig {
             cert: PathBuf::new(),
             pkey: PathBuf::new(),
             db: home_dir.join(CONFIG_DIR),
+            dirpath: home_dir.join(CONFIG_DIR),
         }
     }
 }
@@ -36,6 +41,37 @@ impl Default for BriefsConfig {
 impl BriefsConfig {
     /// Write the config to path
     pub fn save(&self) -> anyhow::Result<()> {
+        // • Make sure filepath exists
+        std::fs::create_dir_all(self.dirpath.clone())?;
+        // • Create config file
+        let filepath = self.dirpath.join(CONFIG_FILE);
+        let mut fptr = std::fs::File::create(filepath)?;
+        let config = String::from(format!(
+            "[config]\
+            \nsocket = \"{}\"\
+            \ncert = \"{}\"\
+            \npkey = \"{}\"\
+            \ndb = \"{}\"",
+            self.socket.to_string(),
+            self.cert.to_str().unwrap_or_default(),
+            self.pkey.to_str().unwrap_or_default(),
+            self.db.to_str().unwrap_or_default()
+        ));
+        fptr.write_all(config.as_bytes())?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_and_save() -> anyhow::Result<()> {
+        let config = BriefsConfig::default();
+
+        config.save()?;
+
         Ok(())
     }
 }
