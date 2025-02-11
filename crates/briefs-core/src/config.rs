@@ -11,6 +11,7 @@ use crate::BriefsError;
 
 const CONFIG_DIR: &str = ".briefs";
 const CONFIG_FILE: &str = "briefs.toml";
+const CONFIG_ENV: &str = "BRIEFSCONF";
 
 #[derive(Debug)]
 pub struct BriefsConfig {
@@ -47,6 +48,16 @@ impl Default for BriefsConfig {
 }
 
 impl BriefsConfig {
+    /// Sets `filepath` & `dirpath` from the given toml file.
+    pub fn set_filepath(&mut self, new_path: PathBuf) -> anyhow::Result<()> {
+        self.dirpath = new_path
+            .canonicalize()?
+            .parent()
+            .ok_or(BriefsError::config_error("filepath has no parent".into()))?
+            .to_path_buf();
+        self.filepath = new_path;
+        Ok(())
+    }
     /// Write the config to path
     pub fn save(&self) -> anyhow::Result<()> {
         // • Make sure filepath exists
@@ -69,12 +80,15 @@ impl BriefsConfig {
         Ok(())
     }
 
+    /// Read config from file. This should only be used when
+    /// the config file has the required configurations.
     pub fn from_file(file: PathBuf) -> anyhow::Result<Self> {
         let mut buf = String::new();
         let mut fptr = std::fs::File::open(file.clone())?;
         let _ = fptr.read_to_string(&mut buf)?;
         let mut config = BriefsConfig::default();
         config.dirpath = file
+            .canonicalize()?
             .parent()
             .ok_or(BriefsError::config_error("filepath has no parent".into()))?
             .to_path_buf();
@@ -118,6 +132,22 @@ impl BriefsConfig {
 
         Ok(config)
     }
+}
+
+pub fn fetch_config_from_env() -> anyhow::Result<PathBuf> {
+    let result = std::env::var(CONFIG_ENV)?;
+    let dirpath = PathBuf::try_from(result)?;
+    if !dirpath.is_dir() {
+        return Err(BriefsError::config_error("BRIEFSCONF is not a dir path".into()).into());
+    }
+    let filepath = dirpath.join(CONFIG_FILE);
+    if !filepath.is_file() {
+        return Err(BriefsError::config_error(
+            "BRIEFSCONF does not contain valid 'briefs.toml'".into(),
+        )
+        .into());
+    }
+    return Ok(filepath);
 }
 
 #[cfg(test)]
@@ -174,20 +204,19 @@ mod tests {
         assert_eq!(cpt.name("key").unwrap().as_str(), "socket");
         assert_eq!(cpt.name("val").unwrap().as_str(), "0.0.0.0:80");
 
-
         let data = "socket = ''";
         let cpt = pattern.captures(data).unwrap();
         assert_eq!(cpt.name("key").unwrap().as_str(), "socket");
         assert_eq!(cpt.name("val").unwrap().as_str(), "");
 
-        let data = r#"cert = "/Users/rishabh""#;
+        let data = r#"cert = "/Users/odeg""#;
         let cpt = pattern.captures(data).unwrap();
         assert_eq!(cpt.name("key").unwrap().as_str(), "cert");
-        assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/rishabh");
+        assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/odeg");
 
-        let data = r#"db = "/Users/rishabh/.briefs""#;
+        let data = r#"db = "/Users/odeg/.briefs""#;
         let cpt = pattern.captures(data).unwrap();
         assert_eq!(cpt.name("key").unwrap().as_str(), "db");
-        assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/rishabh/.briefs");
+        assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/odeg/.briefs");
     }
 }

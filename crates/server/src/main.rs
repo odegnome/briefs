@@ -1,30 +1,45 @@
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::sync::Arc;
 
 use briefs_core::state::CatchUpResponse;
 use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
-use briefs_core::{post, stream, Command, StreamCommand, StreamResponse, db::generate_temp_db};
+use briefs_core::{db::generate_temp_db, post, stream, Command, StreamCommand, StreamResponse, config};
 
-use server::{
-    handle_conn_request,
-    interprocess::respond_with_bytes,
-    setup_server,
-};
+use server::{handle_conn_request, interprocess::respond_with_bytes, setup_server};
 
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(16);
 
-    let db_path_outer = generate_temp_db();
-    let db_path = db_path_outer.to_owned();
+    // Load config or Generate new config
+    let config = match config::fetch_config_from_env() {
+        Ok(filepath) => config::BriefsConfig::from_file(filepath).unwrap(),
+        Err(e) => {
+            eprintln!("✗ Unable to fetch config path from env: {:?}", e);
+            println!("✓ Creating new default config");
+            let mut config = config::BriefsConfig::default();
+            let db_path = generate_temp_db();
+            config.db = db_path.clone();
+            config.socket = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+            config.save().unwrap();
+            println!("✓ Saved config to '$HOME/.breifs/briefs.toml'");
+            config
+        }
+    };
+
     let stream_handle = tokio::spawn(async move {
         //-------
         // Setups
         //-------
         println!("Stream handle running...");
+        let db_path = config.db.clone();
+        // !-------
+        // TODO: Load stream from existing data
+        // -------!
         let mut stream = stream::Stream::default();
         setup_server(Some(db_path.clone().into())).expect("Unable to setup db");
         let mut conn = sqlite::open(db_path).expect("Unable to open connection");
@@ -222,7 +237,7 @@ async fn main() {
     });
 
     let conn_handle = tokio::spawn(async move {
-        let socket_addr = "0.0.0.0:8080".to_socket_addrs().unwrap().next().unwrap();
+        let socket_addr = config.socket.clone();
         let server_cert = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/cert.pem");
         let private_key = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/key.pem");
         println!("Setting up connection handler...");
@@ -261,7 +276,7 @@ async fn main() {
     let safe_exit_handle = tokio::spawn(async move {
         ctrl_c().await.unwrap();
         println!("\nCtrl-C");
-        std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
+        // std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
         std::process::exit(0);
     });
 
