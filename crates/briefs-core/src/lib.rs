@@ -7,6 +7,7 @@ pub mod state;
 pub mod stream;
 pub mod db;
 pub mod config;
+pub mod utils;
 
 use std::fmt::Display;
 
@@ -16,6 +17,11 @@ pub mod constant {
     pub const MAX_POST_LEN: u16 = 300;
     pub const MAX_POST_TITLE: u16 = 100;
     pub const STREAM_CACHE_SIZE: u16 = 10;
+    pub const CONFIG_DIR: &str = ".briefs";
+    pub const CONFIG_FILE: &str = "briefs.toml";
+    pub const CONFIG_ENV: &str = "BRIEFSCONF";
+    pub const DATA_DIR: &str = "data";
+    pub const DATA_FILE: &str = "stream.txt";
 }
 
 /// Used to send acknowledgements to the connection handler.

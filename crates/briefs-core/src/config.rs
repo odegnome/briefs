@@ -7,11 +7,10 @@ use std::{
     str::FromStr,
 };
 
-use crate::BriefsError;
-
-const CONFIG_DIR: &str = ".briefs";
-const CONFIG_FILE: &str = "briefs.toml";
-const CONFIG_ENV: &str = "BRIEFSCONF";
+use crate::{
+    constant::{CONFIG_DIR, CONFIG_ENV, CONFIG_FILE},
+    BriefsError,
+};
 
 #[derive(Debug)]
 pub struct BriefsConfig {
@@ -58,6 +57,7 @@ impl BriefsConfig {
         self.filepath = new_path;
         Ok(())
     }
+
     /// Write the config to path
     pub fn save(&self) -> anyhow::Result<()> {
         // • Make sure filepath exists

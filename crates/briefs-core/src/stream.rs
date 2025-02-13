@@ -32,6 +32,26 @@ impl Default for Stream {
 }
 
 impl Stream {
+    pub fn assemble(last_updated: u64, doi: u64) -> anyhow::Result<Self> {
+        // !-------
+        // Query Db for cache and nposts
+        // -------!
+
+        let posts;
+        let size;
+        let nposts;
+
+        Ok(Stream {
+            posts,
+            size,
+            nposts,
+            last_updated,
+            date_of_inception: doi,
+        })
+    }
+}
+
+impl Stream {
     // ***
     // Command handlers
     // ***
@@ -206,8 +226,13 @@ impl Stream {
         self.last_updated.clone()
     }
 
-    /// Get the number of posts in stream
+    /// Get the number of posts in cache
     pub fn size(&self) -> usize {
+        self.size as usize
+    }
+
+    /// Get the number of posts in stream
+    pub fn nposts(&self) -> usize {
         self.nposts as usize
     }
 
