@@ -1,5 +1,6 @@
-use regex::Regex;
 use std::io::Write;
+
+use anyhow::ensure;
 
 use crate::{
     config::BriefsConfig,
@@ -16,19 +17,12 @@ pub fn save_stream_on_disk(stream: &Stream, config: &BriefsConfig) -> anyhow::Re
     let stream_file = data_dir.join(DATA_FILE);
     let mut fileptr = std::fs::File::create(&stream_file)?;
 
+    let mut content = Vec::with_capacity(16);
+    content.extend(stream.last_updated().to_be_bytes());
+    content.extend(stream.date_of_inception().to_be_bytes());
+
     // Write data
-    let content = format!(
-        "!! Don't modify this file manually !!\
-        \nsize={}\
-        \nnposts={}\
-        \nupdated={}\
-        \ndoi={}\n",
-        stream.size(),
-        stream.nposts(),
-        stream.last_updated(),
-        stream.date_of_inception()
-    );
-    fileptr.write_all(content.as_bytes())?;
+    fileptr.write_all(content.as_slice())?;
 
     Ok(())
 }
@@ -43,64 +37,61 @@ pub fn read_stream_from_disk(config: &BriefsConfig) -> anyhow::Result<Stream> {
         return Err(BriefsError::utils_error("Stream data does not exist".into()).into());
     }
 
-    let buf = std::fs::read_to_string(stream_file)?;
-    let buf: Vec<&str> = buf.split('\n').collect();
+    let cache = std::fs::read(stream_file)?;
 
-    let mut doi: Option<u64> = None;
-    let mut updated: Option<u64> = None;
+    ensure!(
+        cache.len() == 16,
+        BriefsError::utils_error("Incorrect cache len".into())
+    );
 
-    let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/]*)['"]?.*$"#)?;
-    for text in buf.into_iter().skip(1) {
-        if let Some(matches) = pattern.captures(text) {
-            match matches.name("key").map_or("", |val| val.as_str()) {
-                "doi" => {
-                    doi = matches
-                        .name("val")
-                        .map(|val| val.as_str().parse::<u64>().expect("Cannot parse 'doi'"))
-                }
-                "updated" => {
-                    updated = matches
-                        .name("val")
-                        .map(|val| val.as_str().parse::<u64>().expect("Cannot parse 'updated'"))
-                }
+    let mut u64_chunks = cache.chunks_exact(8);
+    let mut u64_barray = [0u8; 8];
+    u64_barray.copy_from_slice(
+        u64_chunks
+            .next()
+            .ok_or(BriefsError::utils_error("Cannot parse doi chunk".into()))?,
+    );
+    let last_updated = u64::from_be_bytes(u64_barray);
+    u64_barray.copy_from_slice(
+        u64_chunks
+            .next()
+            .ok_or(BriefsError::utils_error("Cannot parse doi chunk".into()))?,
+    );
+    let doi = u64::from_be_bytes(u64_barray);
 
-                _ => {
-                    return Err(
-                        BriefsError::config_error("Parsing error: key not found".into()).into(),
-                    )
-                }
-            }
-        }
-    }
-
-    if doi.is_none() || updated.is_none() {
-        return Err(
-            BriefsError::utils_error("Required values not found in stream file".into()).into(),
-        );
-    }
-
-    Ok(Stream::assemble(updated.unwrap(), doi.unwrap())?)
+    Ok(Stream::assemble(last_updated, doi)?)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
-
     use regex::Regex;
+    use std::path::PathBuf;
 
     use super::*;
     use crate::constant::{CONFIG_DIR, CONFIG_FILE};
+    use rand::{prelude::Distribution, thread_rng};
 
     // Create default stream and config. Also, dirpath in briefsconfig
-    // will certainly exist.
+    // will certainly exist. The dirpath will be random, in order to allow
+    // test cases to be run concurrently.
     fn get_mocks() -> (Stream, BriefsConfig) {
         let tmp_dir = std::env::temp_dir();
         let stream = Stream::default();
         let mut config = BriefsConfig::default();
 
+        let mut dirname = String::from(CONFIG_DIR);
+        let gibberish: Vec<String> = rand::distributions::uniform::Uniform::<u8>::new(0, 10)
+            .sample_iter(thread_rng())
+            .map(|val| val.to_string())
+            .take(5)
+            .collect();
+        dirname.extend(gibberish);
+
+        let dirpath = tmp_dir.join(dirname).join(CONFIG_FILE);
+
         let error = "Error creating mocks for testing";
         config
-            .set_filepath(tmp_dir.join(CONFIG_DIR).join(CONFIG_FILE))
+            .set_filepath(dirpath)
             .expect(error);
 
         std::fs::create_dir_all(&config.dirpath).expect(error);
@@ -109,8 +100,44 @@ mod tests {
         (stream, config)
     }
 
+    fn cleanup(dirpath: PathBuf) {
+        assert!(dirpath.is_dir());
+
+        std::fs::remove_dir_all(dirpath).unwrap();
+    }
+
     fn get_regex_pattern() -> Regex {
         Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/]*)['"]?.*$"#).unwrap()
+    }
+
+    /// Returns last_updated & date_of_inception, which are u64 in stream.
+    fn read_stream_byte_cache(file: PathBuf) -> (u64, u64) {
+        let cache = std::fs::read(file).unwrap();
+
+        assert!(
+            cache.len() == 16,
+            "{:?}",
+            BriefsError::utils_error("Incorrect cache len".into())
+        );
+
+        let mut u64_chunks = cache.chunks_exact(8);
+        let mut u64_barray = [0u8; 8];
+        u64_barray.copy_from_slice(
+            u64_chunks
+                .next()
+                .ok_or(BriefsError::utils_error("Cannot parse doi chunk".into()))
+                .unwrap(),
+        );
+        let last_updated = u64::from_be_bytes(u64_barray);
+        u64_barray.copy_from_slice(
+            u64_chunks
+                .next()
+                .ok_or(BriefsError::utils_error("Cannot parse doi chunk".into()))
+                .unwrap(),
+        );
+        let doi = u64::from_be_bytes(u64_barray);
+
+        (last_updated, doi)
     }
 
     #[test]
@@ -124,10 +151,10 @@ mod tests {
         assert!(stream_dir.exists());
         assert!(stream_file.exists());
 
-        let mut fptr = std::fs::File::open(stream_file).unwrap();
-        let mut buf = String::new();
-        fptr.read_to_string(&mut buf).unwrap();
+        let (last_updated, doi) = read_stream_byte_cache(stream_file.clone());
+        assert_eq!(stream.last_updated(), last_updated);
+        assert_eq!(stream.date_of_inception(), doi);
 
-        panic!("Incomplete")
+        cleanup(config.dirpath);
     }
 }
