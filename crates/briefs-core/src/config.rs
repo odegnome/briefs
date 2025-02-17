@@ -12,7 +12,7 @@ use crate::{
     BriefsError,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BriefsConfig {
     /// Socket address used to serve. Should be <ip>:<port>
     /// Example: 127.0.0.1:8080
@@ -103,7 +103,7 @@ impl BriefsConfig {
                 BriefsError::config_error("Parsing error: header not found".to_string()).into(),
             );
         };
-        let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/]*)['"]?.*$"#)?;
+        let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/-]*)['"]?.*$"#)?;
         // let pattern = Regex::new(r#"^(?<key>\w+) ?= ?"?(?<val>\w+)"? *$"#)?;
         for text in buf.into_iter().skip(1) {
             if let Some(matches) = pattern.captures(text) {
@@ -138,13 +138,14 @@ pub fn fetch_config_from_env() -> anyhow::Result<PathBuf> {
     let result = std::env::var(CONFIG_ENV)?;
     let dirpath = PathBuf::try_from(result)?;
     if !dirpath.is_dir() {
-        return Err(BriefsError::config_error("BRIEFSCONF is not a dir path".into()).into());
+        return Err(BriefsError::config_error(format!("{} is not a dir path", CONFIG_ENV)).into());
     }
     let filepath = dirpath.join(CONFIG_FILE);
     if !filepath.is_file() {
-        return Err(BriefsError::config_error(
-            "BRIEFSCONF does not contain valid 'briefs.toml'".into(),
-        )
+        return Err(BriefsError::config_error(format!(
+            "{} does not contain valid 'briefs.toml'",
+            CONFIG_ENV
+        ))
         .into());
     }
     return Ok(filepath);
@@ -183,6 +184,32 @@ mod tests {
 
         config.cert = home_dir().unwrap().join(CONFIG_DIR);
         config.db = home_dir().unwrap().join(CONFIG_DIR);
+        config.save().unwrap();
+
+        let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
+        assert_eq!(config.socket, saved_config.socket);
+        assert_eq!(config.cert, saved_config.cert);
+        assert_eq!(config.pkey, saved_config.pkey);
+        assert_eq!(config.db, saved_config.db);
+        assert_eq!(config.filepath, saved_config.filepath);
+        assert_eq!(config.dirpath, saved_config.dirpath);
+    }
+
+    #[test]
+    fn test_save_to_file() {
+        let mut config = BriefsConfig::default();
+        config.save().unwrap();
+
+        let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
+        assert_eq!(config.socket, saved_config.socket);
+        assert_eq!(config.cert, saved_config.cert);
+        assert_eq!(config.pkey, saved_config.pkey);
+        assert_eq!(config.db, saved_config.db);
+        assert_eq!(config.filepath, saved_config.filepath);
+        assert_eq!(config.dirpath, saved_config.dirpath);
+
+        config.cert = std::env::temp_dir().join(CONFIG_DIR);
+        config.db = crate::db::generate_temp_db();
         config.save().unwrap();
 
         let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
