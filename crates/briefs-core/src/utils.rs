@@ -71,7 +71,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::constant::CONFIG_FILE;
+    use crate::{constant::CONFIG_FILE, db::test::setup_mock_db};
     use rand::{prelude::Distribution, thread_rng};
 
     const CONFIG_DIR: &str = "briefs";
@@ -160,5 +160,30 @@ mod tests {
         assert_eq!(stream.date_of_inception(), doi);
 
         cleanup(config.dirpath);
+    }
+
+    #[test]
+    fn test_basic_read_stream_from_disk() {
+        let (stream, config) = get_mocks();
+
+        save_stream_on_disk(&stream, &config).unwrap();
+
+        let stream_dir = config.dirpath.join(DATA_DIR);
+        let stream_file = stream_dir.join(DATA_FILE);
+        assert!(stream_dir.exists());
+        assert!(stream_file.exists());
+
+        let mock_db = setup_mock_db();
+        let mut conn = sqlite::open(&mock_db).unwrap();
+
+        let dskstream = read_stream_from_disk(&mut conn, &config).unwrap();
+
+        assert_eq!(dskstream.last_updated(), stream.last_updated());
+        assert_eq!(dskstream.date_of_inception(), stream.date_of_inception());
+        assert_eq!(dskstream.size(), stream.size());
+        assert_eq!(dskstream.nposts(), stream.nposts());
+
+        cleanup(config.dirpath);
+
     }
 }

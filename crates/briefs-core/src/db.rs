@@ -49,10 +49,10 @@ pub fn setup_tables(conn: &mut Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn setup_view(conn: &mut Connection) -> anyhow::Result<()> {
+pub fn setup_views(conn: &mut Connection) -> anyhow::Result<()> {
     let statement = format!(
         "\
-        CREATE VIEW IF NOT EXISTS {LATEST_VIEW} AS\
+        CREATE VIEW IF NOT EXISTS {LATEST_VIEW} AS \
         SELECT * FROM {POSTS_TABLE};\
         "
     );
@@ -75,10 +75,10 @@ pub fn query_table_info(
     Ok(result)
 }
 
-pub fn create_db(path: PathBuf) -> anyhow::Result<()> {
-    let _conn = sqlite::open(path.as_path())?;
+pub fn create_db(path: PathBuf) -> anyhow::Result<Connection> {
+    let conn = sqlite::open(path.as_path())?;
 
-    Ok(())
+    Ok(conn)
 }
 
 pub fn insert_post(conn: &mut Connection, data: &Post) -> anyhow::Result<()> {
@@ -203,6 +203,14 @@ pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> anyhow::Result<Vec<Post>> {
 /// path - Can be either a complete file path(with .db suffix) or
 ///        a directory name which will then be appended with default
 ///        db name.
+///
+/// # Panics
+///
+/// Panics if sqlite3 is not installed.
+///
+/// # Errors
+///
+/// This function will return an error if .
 pub fn setup_db(path: Option<PathBuf>) -> anyhow::Result<()> {
     // Check if sqlite3 is installed
     let sqlite3_check = process::Command::new("sqlite3")
@@ -224,23 +232,29 @@ pub fn setup_db(path: Option<PathBuf>) -> anyhow::Result<()> {
     );
 
     // Setup Db
+    let mut conn: Connection;
     match path {
         Some(inner_path) => {
             if !inner_path.try_exists()? || inner_path.is_dir() {
                 println!("{inner_path:?} does not exist or is a directory; creating a new db");
 
                 if !inner_path.to_str().unwrap().ends_with(".db") {
-                    create_db(inner_path.join(DB_NAME))?;
+                    conn = create_db(inner_path.join(DB_NAME))?;
                 } else {
-                    create_db(inner_path)?;
+                    conn = create_db(inner_path)?;
                 }
+            } else {
+                conn = create_db(inner_path)?;
             }
         }
         None => {
             let db_path = std::env::temp_dir().join(DB_NAME);
-            create_db(db_path)?;
+            conn = create_db(db_path)?;
         }
     }
+
+    setup_tables(&mut conn)?;
+    setup_views(&mut conn)?;
 
     Ok(())
 }
@@ -270,9 +284,20 @@ pub fn generate_temp_db() -> PathBuf {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use sqlite::Value;
+
+    pub fn setup_mock_db() -> PathBuf {
+        let tmp_db = generate_temp_db();
+        setup_db(Some(tmp_db.clone())).expect("Error setting up mock db");
+
+        tmp_db
+    }
+
+    pub fn cleanup_db(dbpath: PathBuf) {
+        std::fs::remove_file(dbpath).expect("Db cleanup failed");
+    }
 
     #[test]
     fn test_generate_random_db_name() {
