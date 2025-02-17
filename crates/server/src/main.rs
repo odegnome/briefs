@@ -7,7 +7,9 @@ use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
-use briefs_core::{db::generate_temp_db, post, stream, Command, StreamCommand, StreamResponse, config};
+use briefs_core::{
+    config, db::generate_temp_db, post, stream, Command, StreamCommand, StreamResponse,
+};
 
 use server::{handle_conn_request, interprocess::respond_with_bytes, setup_server};
 
@@ -43,7 +45,6 @@ async fn main() {
         let mut stream = stream::Stream::default();
         setup_server(Some(db_path.clone().into())).expect("Unable to setup db");
         let mut conn = sqlite::open(db_path).expect("Unable to open connection");
-        briefs_core::db::setup_tables(&mut conn).expect("Unable to setup tables");
 
         //-------
         // Handle requets from conn handler

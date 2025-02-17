@@ -71,7 +71,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::{constant::CONFIG_FILE, db::test::setup_mock_db};
+    use crate::{constant::CONFIG_FILE, db::test::{self, setup_mock_db}};
     use rand::{prelude::Distribution, thread_rng};
 
     const CONFIG_DIR: &str = "briefs";
@@ -184,6 +184,6 @@ mod tests {
         assert_eq!(dskstream.nposts(), stream.nposts());
 
         cleanup(config.dirpath);
-
+        test::cleanup_db(mock_db);
     }
 }

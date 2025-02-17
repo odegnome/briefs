@@ -318,7 +318,7 @@ pub mod test {
 
         assert!(updated_path.exists(), "Db creation failed at expected path");
 
-        std::fs::remove_file(updated_path).expect("Db cleanup failed");
+        cleanup_db(updated_path);
 
         // Setup Db w/o path
         setup_db(None).unwrap();
@@ -326,7 +326,7 @@ pub mod test {
 
         assert!(path.exists(), "Db creation failed at expected path");
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 
     #[test]
@@ -338,8 +338,6 @@ pub mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = setup_tables(&mut conn);
-        assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
@@ -365,7 +363,7 @@ pub mod test {
         assert!(actual_rows == expected_rows, "Number of rows don't match");
         assert_eq!(actual_columns, expected_columns);
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 
     #[test]
@@ -377,8 +375,6 @@ pub mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = setup_tables(&mut conn);
-        assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
@@ -424,7 +420,7 @@ pub mod test {
         ];
         assert_eq!(actual_columns, expected_columns);
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 
     #[test]
@@ -436,8 +432,6 @@ pub mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = setup_tables(&mut conn);
-        assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
@@ -479,7 +473,7 @@ pub mod test {
         let actual_rows = row_data.len();
         assert_eq!(actual_rows, expected_rows);
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 
     #[test]
@@ -491,8 +485,6 @@ pub mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = setup_tables(&mut conn);
-        assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
@@ -536,7 +528,7 @@ pub mod test {
         let post_title = row_data[0].take("title");
         assert_eq!(post_title, expected_title);
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 
     #[test]
@@ -548,8 +540,6 @@ pub mod test {
         assert!(path.exists(), "Db creation failed at expected path");
 
         let mut conn = sqlite::open(path.clone()).unwrap();
-        let result = setup_tables(&mut conn);
-        assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
         let result = query_table_info(&mut conn, POSTS_TABLE);
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
@@ -593,6 +583,6 @@ pub mod test {
         let post_msg = row_data[0].take("msg");
         assert_eq!(post_msg, expected_msg);
 
-        std::fs::remove_file(path).expect("Db cleanup failed");
+        cleanup_db(path);
     }
 }
