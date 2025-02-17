@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use anyhow::ensure;
+use sqlite::Connection;
 
 use crate::{
     config::BriefsConfig,
@@ -27,7 +28,10 @@ pub fn save_stream_on_disk(stream: &Stream, config: &BriefsConfig) -> anyhow::Re
     Ok(())
 }
 
-pub fn read_stream_from_disk(config: &BriefsConfig) -> anyhow::Result<Stream> {
+pub fn read_stream_from_disk(
+    conn: &mut Connection,
+    config: &BriefsConfig,
+) -> anyhow::Result<Stream> {
     let data_dir = config.dirpath.join(DATA_DIR);
     if !std::fs::exists(&data_dir)? {
         return Err(BriefsError::utils_error("Data directory does not exist".into()).into());
@@ -59,17 +63,18 @@ pub fn read_stream_from_disk(config: &BriefsConfig) -> anyhow::Result<Stream> {
     );
     let doi = u64::from_be_bytes(u64_barray);
 
-    Ok(Stream::assemble(last_updated, doi)?)
+    Ok(Stream::assemble(conn, last_updated, doi)?)
 }
 
 #[cfg(test)]
 mod tests {
-    use regex::Regex;
     use std::path::PathBuf;
 
     use super::*;
-    use crate::constant::{CONFIG_DIR, CONFIG_FILE};
+    use crate::constant::CONFIG_FILE;
     use rand::{prelude::Distribution, thread_rng};
+
+    const CONFIG_DIR: &str = "briefs";
 
     // Create default stream and config. Also, dirpath in briefsconfig
     // will certainly exist. The dirpath will be random, in order to allow
@@ -87,15 +92,18 @@ mod tests {
             .collect();
         dirname.extend(gibberish);
 
-        let dirpath = tmp_dir.join(dirname).join(CONFIG_FILE);
+        let dirpath = tmp_dir.join(dirname);
+        println!("{:?}", dirpath);
+        let filepath = dirpath.join(CONFIG_FILE);
+        println!("{:?}", filepath);
 
-        let error = "Error creating mocks for testing";
-        config
-            .set_filepath(dirpath)
-            .expect(error);
+        let error = "Error creating mocks";
+        std::fs::create_dir_all(&dirpath).expect(error);
+        assert!(std::fs::exists(&dirpath).expect("WTF?"));
+        std::fs::File::create(&filepath).expect(error);
 
-        std::fs::create_dir_all(&config.dirpath).expect(error);
-        std::fs::File::create(&config.filepath).expect(error);
+        let error = "Error setting filepath";
+        config.set_filepath(filepath).expect(error);
 
         (stream, config)
     }
@@ -104,10 +112,6 @@ mod tests {
         assert!(dirpath.is_dir());
 
         std::fs::remove_dir_all(dirpath).unwrap();
-    }
-
-    fn get_regex_pattern() -> Regex {
-        Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/]*)['"]?.*$"#).unwrap()
     }
 
     /// Returns last_updated & date_of_inception, which are u64 in stream.

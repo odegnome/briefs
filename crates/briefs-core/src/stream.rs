@@ -32,14 +32,15 @@ impl Default for Stream {
 }
 
 impl Stream {
-    pub fn assemble(last_updated: u64, doi: u64) -> anyhow::Result<Self> {
+    pub fn assemble(conn: &mut Connection, last_updated: u64, doi: u64) -> anyhow::Result<Self> {
         // !-------
         // Query Db for cache and nposts
         // -------!
 
-        let posts;
-        let size;
-        let nposts;
+        let records = db::query_last_n(conn, STREAM_CACHE_SIZE as u32)?;
+        let posts = VecDeque::from(db::sqlite_to_post(records)?);
+        let size = posts.len();
+        let nposts = 0;
 
         Ok(Stream {
             posts,

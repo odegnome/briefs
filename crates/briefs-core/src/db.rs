@@ -5,6 +5,7 @@ use std::{path::PathBuf, process};
 
 const DB_NAME: &str = "briefs-dev.db";
 pub const POSTS_TABLE: &str = "posts";
+pub const LATEST_VIEW: &str = "latest";
 
 pub trait DbInsertString {
     /// A trait for converting the underlying data into Db friendly
@@ -41,6 +42,19 @@ pub fn setup_tables(conn: &mut Connection) -> anyhow::Result<()> {
         date INTEGER NOT NULL,
         edited BOOLEAN);
     "
+    );
+
+    conn.execute(statement)?;
+
+    Ok(())
+}
+
+pub fn setup_view(conn: &mut Connection) -> anyhow::Result<()> {
+    let statement = format!(
+        "\
+        CREATE VIEW IF NOT EXISTS {LATEST_VIEW} AS\
+        SELECT * FROM {POSTS_TABLE};\
+        "
     );
 
     conn.execute(statement)?;
@@ -163,11 +177,7 @@ pub fn query_last_n(conn: &mut Connection, n: u32) -> anyhow::Result<Vec<sqlite:
     Ok(result)
 }
 
-pub fn catchup(
-    conn: &Connection,
-    sid: u64,
-    eid: u64,
-) -> anyhow::Result<Vec<sqlite::Row>> {
+pub fn catchup(conn: &Connection, sid: u64, eid: u64) -> anyhow::Result<Vec<sqlite::Row>> {
     let statement = format!(
         "SELECT * FROM {} WHERE id >= {} AND id <= {}",
         POSTS_TABLE, sid, eid
