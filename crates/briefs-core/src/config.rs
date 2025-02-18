@@ -151,6 +151,23 @@ pub fn fetch_config_from_env() -> anyhow::Result<PathBuf> {
     return Ok(filepath);
 }
 
+pub fn fallback_config_dir() -> anyhow::Result<PathBuf> {
+    let dirpath = home_dir()
+        .ok_or_else(|| BriefsError::config_error("Home directory not found".into()))?
+        .join(CONFIG_DIR);
+    if !dirpath.is_dir() {
+        return Err(BriefsError::config_error("Fallback directory does not exist".into()).into());
+    }
+    let filepath = dirpath.join(CONFIG_FILE);
+    if !filepath.is_file() {
+        return Err(BriefsError::config_error(
+            "Fallback directory does not contain config file".into(),
+        )
+        .into());
+    }
+    return Ok(filepath);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

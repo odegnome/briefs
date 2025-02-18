@@ -10,7 +10,7 @@ use textwrap::{self, wrap};
 /// this is the struct that stores all the necessary data.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Post {
-    id: usize,
+    id: u32,
     pub title: String,
     pub msg: String,
     pub date: u64,
@@ -20,7 +20,7 @@ pub struct Post {
 impl Post {
     /// Create a new post by providing the `title` and the body
     /// of the message in `msg`.
-    pub fn new(id: usize, title: String, msg: String) -> BriefsResult<Self> {
+    pub fn new(id: u32, title: String, msg: String) -> BriefsResult<Self> {
         verify_title(&title)?;
         verify_msg(&msg)?;
         Ok(Post {
@@ -48,7 +48,7 @@ impl Post {
         Ok(())
     }
 
-    pub fn id(&self) -> BriefsResult<usize> {
+    pub fn id(&self) -> BriefsResult<u32> {
         Ok(self.id)
     }
 

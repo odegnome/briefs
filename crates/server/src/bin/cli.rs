@@ -48,24 +48,24 @@ pub enum BriefsCommand {
 
     /// briefs with the latest posts
     Catchup {
-        idx: Option<usize>,
+        idx: Option<u32>,
     },
 
     GetPost {
-        id: usize,
+        id: u32,
     },
 
     DeletePost {
-        id: usize,
+        id: u32,
     },
 
     UpdateMsg {
-        id: usize,
+        id: u32,
         msg: String,
     },
 
     UpdateTitle {
-        id: usize,
+        id: u32,
         title: String,
     },
 
@@ -128,7 +128,7 @@ async fn new_post(
 
 async fn briefs(
     mut stream: TlsStream<TcpStream>,
-    starting_index: usize,
+    starting_index: u32,
     json: bool,
 ) -> BriefsResult<()> {
     let request = Command::Catchup {
@@ -171,7 +171,7 @@ async fn briefs(
     Ok(())
 }
 
-async fn get_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<()> {
+async fn get_post(mut stream: TlsStream<TcpStream>, id: u32) -> BriefsResult<()> {
     let request = Command::Get { id };
     stream
         .write_all(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -199,7 +199,7 @@ async fn get_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<(
     Ok(())
 }
 
-async fn remove_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResult<()> {
+async fn remove_post(mut stream: TlsStream<TcpStream>, id: u32) -> BriefsResult<()> {
     let request = Command::Delete { id };
     stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -227,7 +227,7 @@ async fn remove_post(mut stream: TlsStream<TcpStream>, id: usize) -> BriefsResul
     Ok(())
 }
 
-async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) -> BriefsResult<()> {
+async fn update_msg(mut stream: TlsStream<TcpStream>, id: u32, msg: String) -> BriefsResult<()> {
     let request = Command::UpdateMsg { id, msg };
     stream
         .write(&serde_json::to_vec(&request).unwrap().as_slice())
@@ -257,7 +257,7 @@ async fn update_msg(mut stream: TlsStream<TcpStream>, id: usize, msg: String) ->
 
 async fn update_title(
     mut stream: TlsStream<TcpStream>,
-    id: usize,
+    id: u32,
     title: String,
 ) -> BriefsResult<()> {
     let request = Command::UpdateTitle { id, title };
