@@ -12,7 +12,7 @@ pub struct CatchUpResponse {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct StreamMetadata {
-    pub latest_post_id: Option<usize>,
+    pub latest_post_id: Option<u32>,
     pub last_updated: u64,
-    pub posts_count: usize,
+    pub posts_count: u32,
 }

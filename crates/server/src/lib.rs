@@ -26,6 +26,8 @@ pub mod interprocess {
     }
 
     pub struct InterProcessStatus {
+        // data: Vec<u8> <-- Maybe?
+        // error: Vec<u8> <-- Maybe?
         pub status: Status,
         pub code: u32,
         pub message: [u8; 60],

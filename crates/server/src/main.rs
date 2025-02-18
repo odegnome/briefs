@@ -1,34 +1,62 @@
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::sync::Arc;
 
-use briefs_core::state::CatchUpResponse;
 use rustls::pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer};
 use tokio::{net::TcpListener, signal::ctrl_c, sync::mpsc};
 use tokio_rustls::{rustls, TlsAcceptor};
 
-use briefs_core::{post, stream, Command, StreamCommand, StreamResponse, db::generate_temp_db};
-
-use server::{
-    handle_conn_request,
-    interprocess::respond_with_bytes,
-    setup_server,
+use briefs_core::{
+    config,
+    db::generate_temp_db,
+    post,
+    state::CatchUpResponse,
+    stream,
+    utils::{read_stream_from_disk, save_stream_on_disk},
+    Command, StreamCommand, StreamResponse,
 };
+
+use server::{handle_conn_request, interprocess::respond_with_bytes, setup_server};
 
 #[tokio::main]
 async fn main() {
     let (tx, mut rx) = mpsc::channel(16);
 
-    let db_path_outer = generate_temp_db();
-    let db_path = db_path_outer.to_owned();
+    // Load config or Generate new config
+    let config = match config::fetch_config_from_env() {
+        Ok(filepath) => config::BriefsConfig::from_file(filepath).unwrap(),
+        Err(e) => {
+            eprintln!("✗ Config env variable not set: {:?}", e);
+            match config::fallback_config_dir() {
+                Ok(filepath) => config::BriefsConfig::from_file(filepath).unwrap(),
+                Err(e) => {
+                    eprintln!("✗ Fallback config failure: {:?}", e);
+                    println!("✓ Creating new default config");
+                    let mut config = config::BriefsConfig::default();
+                    let db_path = generate_temp_db();
+                    config.db = db_path.clone();
+                    config.socket = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 8080);
+                    config.save().unwrap();
+                    println!("✓ Saved config to '{}'", config.filepath.display());
+                    config
+                }
+            }
+        }
+    };
+    let socket = config.socket.clone();
+
     let stream_handle = tokio::spawn(async move {
-        //-------
-        // Setups
-        //-------
-        println!("Stream handle running...");
-        let mut stream = stream::Stream::default();
+        println!("✓ Stream handle running...");
+        let db_path = config.db.clone();
         setup_server(Some(db_path.clone().into())).expect("Unable to setup db");
         let mut conn = sqlite::open(db_path).expect("Unable to open connection");
-        briefs_core::db::setup_tables(&mut conn).expect("Unable to setup tables");
+        let mut stream = read_stream_from_disk(&mut conn, &config).unwrap_or_else(|_| {
+            eprintln!("✗ No Prexisting stream found");
+            println!("✓ Creating a new stream");
+            let s = stream::Stream::default();
+            save_stream_on_disk(&s, &config).expect("✗ Failed to save stream");
+            s
+        });
 
         //-------
         // Handle requets from conn handler
@@ -36,7 +64,7 @@ async fn main() {
         while let Some(StreamCommand { cmd, resp }) = rx.recv().await {
             match cmd {
                 Command::Create { title, msg } => {
-                    let new_post = post::Post::new(stream.size(), title, msg);
+                    let new_post = post::Post::new(stream.size() as u32, title, msg);
                     if new_post.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -72,7 +100,7 @@ async fn main() {
                 }
 
                 Command::Catchup { last_fetch_id } => {
-                    if stream.size() == 0 || last_fetch_id >= stream.size() {
+                    if stream.size() == 0 || last_fetch_id as usize >= stream.nposts() {
                         let empty_stream_response = serde_json::to_vec(&CatchUpResponse {
                             posts: vec![],
                             caught_up: true,
@@ -82,15 +110,8 @@ async fn main() {
                         continue;
                     };
 
-                    let uncaught_posts = stream.size() - 1 - last_fetch_id;
-                    let limit_index = if uncaught_posts > 10 {
-                        last_fetch_id + 11
-                    } else {
-                        stream.size()
-                    };
-
                     // Catchup
-                    let response = stream.catchup(&mut conn, last_fetch_id, limit_index);
+                    let response = stream.catchup(&mut conn, last_fetch_id, None);
                     if response.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
@@ -118,8 +139,6 @@ async fn main() {
                     }
 
                     resp.unwrap().send(response.unwrap()).unwrap();
-
-                    //resp.unwrap().send(format!("{}", &stream)).unwrap();
                 }
 
                 Command::Get { id } => {
@@ -222,10 +241,10 @@ async fn main() {
     });
 
     let conn_handle = tokio::spawn(async move {
-        let socket_addr = "0.0.0.0:8080".to_socket_addrs().unwrap().next().unwrap();
+        let socket_addr = socket;
         let server_cert = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/cert.pem");
         let private_key = PathBuf::from("/Users/rishabh/project/briefs/auth/keys/key.pem");
-        println!("Setting up connection handler...");
+        println!("✓ Setting up connection handler...");
 
         let certs = CertificateDer::pem_file_iter(server_cert)
             .unwrap()
@@ -241,7 +260,7 @@ async fn main() {
 
         // !------- ACCEPT CONNECTIONS ON PORT 8080 -------!
         let listener = TcpListener::bind(socket_addr).await.unwrap();
-        println!("Listening on {}...", listener.local_addr().unwrap());
+        println!("✓ Listening on {}...", listener.local_addr().unwrap());
 
         loop {
             let _tx = tx.clone();
@@ -259,13 +278,11 @@ async fn main() {
     });
 
     let safe_exit_handle = tokio::spawn(async move {
+        println!("✓ Press Ctrl-C to stop the server");
         ctrl_c().await.unwrap();
-        println!("\nCtrl-C");
-        std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
+        // std::fs::remove_file(db_path_outer).expect("Unable to remove Db file");
         std::process::exit(0);
     });
-
-    println!("Press Ctrl-C to stop the server; this also deletes the test db");
 
     //-------
     // Wait for all threads

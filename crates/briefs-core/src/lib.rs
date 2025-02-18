@@ -6,6 +6,8 @@ pub mod post;
 pub mod state;
 pub mod stream;
 pub mod db;
+pub mod config;
+pub mod utils;
 
 use std::fmt::Display;
 
@@ -15,6 +17,13 @@ pub mod constant {
     pub const MAX_POST_LEN: u16 = 300;
     pub const MAX_POST_TITLE: u16 = 100;
     pub const STREAM_CACHE_SIZE: u16 = 10;
+    pub const CONFIG_DIR: &str = ".briefs";
+    pub const CONFIG_FILE: &str = "briefs.toml";
+    pub const CONFIG_ENV: &str = "BRIEFSCONF";
+    pub const DATA_DIR: &str = "data";
+    pub const DATA_FILE: &str = "stream";
+    pub const PAGINATION_LIMIT: u32 = 40;
+    pub const PAGINATION_DEFAULT: u32 = 20;
 }
 
 /// Used to send acknowledgements to the connection handler.
@@ -22,12 +31,12 @@ pub type Responder<T> = tokio::sync::oneshot::Sender<T>;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum Command {
-    Catchup { last_fetch_id: usize },
+    Catchup { last_fetch_id: u32 },
     Create { title: String, msg: String },
-    UpdateMsg { id: usize, msg: String },
-    UpdateTitle { id: usize, title: String },
-    Delete { id: usize },
-    Get { id: usize },
+    UpdateMsg { id: u32, msg: String },
+    UpdateTitle { id: u32, title: String },
+    Delete { id: u32 },
+    Get { id: u32 },
     Metadata {},
 }
 

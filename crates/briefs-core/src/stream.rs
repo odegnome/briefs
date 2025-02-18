@@ -1,7 +1,7 @@
 use sqlite::Connection;
 
 use crate::{
-    constant::STREAM_CACHE_SIZE,
+    constant::{PAGINATION_DEFAULT, PAGINATION_LIMIT, STREAM_CACHE_SIZE},
     db,
     post::{time_in_sec, Post},
     state::{CatchUpResponse, StreamMetadata},
@@ -32,6 +32,38 @@ impl Default for Stream {
 }
 
 impl Stream {
+    pub fn assemble(conn: &mut Connection, last_updated: u64, doi: u64) -> anyhow::Result<Self> {
+        println!("» Assembling existing stream");
+        let records = db::query_cache(conn)?;
+        // !------- FIX
+        // Cache is returned from newer to older post,
+        // i.e. [0] will contain newest post but deque
+        // should not have newest post at the begin of
+        // the queue when converting into, due to obvious
+        // reason.
+        // -------!
+        let posts = VecDeque::from(db::sqlite_to_post(records)?);
+        let size = posts.len();
+        println!("» Found {} sqlite rows", size);
+        let result = db::query_post_count(conn)?.take("count");
+
+        let nposts = match result {
+            sqlite::Value::Integer(val) => val.try_into()?,
+            _ => return Err(BriefsError::custom_error("Post count not an integer".into()).into()),
+        };
+        println!("» Queried #{} posts", size);
+
+        Ok(Stream {
+            posts,
+            size,
+            nposts,
+            last_updated,
+            date_of_inception: doi,
+        })
+    }
+}
+
+impl Stream {
     // ***
     // Command handlers
     // ***
@@ -51,7 +83,7 @@ impl Stream {
     }
 
     /// Removes an existing post from the stream.
-    pub fn remove_post(&mut self, conn: &mut Connection, id: usize) -> BriefsResult<()> {
+    pub fn remove_post(&mut self, conn: &mut Connection, id: u32) -> BriefsResult<()> {
         db::delete_post_by_id(conn, id)?;
         self.last_updated = time_in_sec(SystemTime::now())?;
         self.decrement_post_count()?;
@@ -68,7 +100,7 @@ impl Stream {
     pub fn update_msg(
         &mut self,
         conn: &mut Connection,
-        id: usize,
+        id: u32,
         new_msg: String,
     ) -> BriefsResult<()> {
         db::update_post_msg_by_id(conn, id, new_msg.clone())?;
@@ -88,7 +120,7 @@ impl Stream {
     pub fn update_title(
         &mut self,
         conn: &mut Connection,
-        id: usize,
+        id: u32,
         new_title: String,
     ) -> BriefsResult<()> {
         db::update_post_title_by_id(conn, id, new_title.clone())?;
@@ -108,8 +140,8 @@ impl Stream {
     pub fn catchup(
         &self,
         conn: &Connection,
-        sid: usize,
-        mut eid: usize,
+        sid: u32,
+        limit: Option<u32>,
     ) -> BriefsResult<CatchUpResponse> {
         let mut response = CatchUpResponse {
             posts: Vec::new(),
@@ -121,18 +153,23 @@ impl Stream {
 
         let mut caught_up = false;
         let last_id = self.posts.back().unwrap().id().unwrap();
-        
+
         if last_id < sid {
             return Ok(response);
         }
 
+        let mut lmt = limit.unwrap_or(PAGINATION_DEFAULT);
+        lmt = std::cmp::min(lmt, PAGINATION_LIMIT);
+        let mut eid = sid + lmt;
         eid = if last_id <= eid {
             caught_up = true;
             last_id
         } else {
             eid
         };
+        println!("» {sid} to {eid}");
         if self.id_in_cache(sid) {
+            println!("» Fetching from cache");
             // use cache
             let sidx = self.post_id_to_idx(sid)?;
             let eidx = self.post_id_to_idx(eid)?;
@@ -141,14 +178,14 @@ impl Stream {
             return Ok(response);
         }
         // use db
-        let records = db::catchup(conn, sid.try_into()?, eid.try_into()?)?;
+        let records = db::catchup(conn, sid.try_into()?, eid.try_into()?, lmt)?;
         response.posts = db::sqlite_to_post(records)?;
         response.caught_up = caught_up;
         Ok(response)
     }
 
     /// Return a specific post.
-    pub fn get_post(&self, conn: &Connection, id: usize) -> Option<Post> {
+    pub fn get_post(&self, conn: &Connection, id: u32) -> Option<Post> {
         let result = self.post_id_to_idx(id);
         match result {
             Ok(idx) => self.posts.get(idx).cloned(),
@@ -161,7 +198,7 @@ impl Stream {
 
     pub fn stream_metadata(&self) -> BriefsResult<StreamMetadata> {
         Ok(StreamMetadata {
-            posts_count: self.nposts as usize,
+            posts_count: self.nposts as u32,
             last_updated: self.last_updated,
             latest_post_id: self.posts.back().map(|val| val.id().unwrap()),
         })
@@ -178,7 +215,7 @@ impl Stream {
     // ***
     // Helpers
     // ***
-    
+
     fn increment_post_count(&mut self) -> BriefsResult<()> {
         self.nposts += 1;
         Ok(())
@@ -189,7 +226,7 @@ impl Stream {
         Ok(())
     }
 
-    fn id_in_cache(&self, index: usize) -> bool {
+    fn id_in_cache(&self, index: u32) -> bool {
         if self.posts.is_empty() {
             false
         } else if index < self.posts.front().unwrap().id().unwrap_or_default() {
@@ -206,8 +243,13 @@ impl Stream {
         self.last_updated.clone()
     }
 
-    /// Get the number of posts in stream
+    /// Get the number of posts in cache
     pub fn size(&self) -> usize {
+        self.size as usize
+    }
+
+    /// Get the number of posts in stream
+    pub fn nposts(&self) -> usize {
         self.nposts as usize
     }
 
@@ -217,7 +259,7 @@ impl Stream {
     }
 
     /// Returns the index of post, with the associated ID, in the posts vector.
-    fn post_id_to_idx(&self, id: usize) -> BriefsResult<usize> {
+    fn post_id_to_idx(&self, id: u32) -> BriefsResult<usize> {
         if self.posts.is_empty() {
             return Err(BriefsError::InvalidId {}.into());
         }
