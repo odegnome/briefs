@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_new_from_file() {
-        let mut config = BriefsConfig::default();
+        let (_, mut config) = crate::utils::tests::get_mocks();
         config.save().unwrap();
 
         let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
@@ -199,8 +199,8 @@ mod tests {
         assert_eq!(config.filepath, saved_config.filepath);
         assert_eq!(config.dirpath, saved_config.dirpath);
 
-        config.cert = home_dir().unwrap().join(CONFIG_DIR);
-        config.db = home_dir().unwrap().join(CONFIG_DIR);
+        config.cert = std::env::temp_dir().join(CONFIG_DIR);
+        config.db = std::env::temp_dir().join(CONFIG_DIR);
         config.save().unwrap();
 
         let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
@@ -210,11 +210,13 @@ mod tests {
         assert_eq!(config.db, saved_config.db);
         assert_eq!(config.filepath, saved_config.filepath);
         assert_eq!(config.dirpath, saved_config.dirpath);
+
+        crate::utils::tests::cleanup(config.dirpath);
     }
 
     #[test]
     fn test_save_to_file() {
-        let mut config = BriefsConfig::default();
+        let (_, mut config) = crate::utils::tests::get_mocks();
         config.save().unwrap();
 
         let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();
@@ -236,12 +238,14 @@ mod tests {
         assert_eq!(config.db, saved_config.db);
         assert_eq!(config.filepath, saved_config.filepath);
         assert_eq!(config.dirpath, saved_config.dirpath);
+
+        crate::utils::tests::cleanup(config.dirpath);
     }
 
     #[test]
     fn test_regex() {
         // let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]??(?<val>\w+)['"]?$"#).unwrap();
-        let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/]*)['"]?$"#).unwrap();
+        let pattern = Regex::new(r#"^(?<key>\w+) ?= ?['"]?(?<val>[0-9a-zA-Z.:/-]*)['"]?$"#).unwrap();
 
         let data = "socket = '0.0.0.0:80'";
         let cpt = pattern.captures(data).unwrap();
@@ -262,5 +266,10 @@ mod tests {
         let cpt = pattern.captures(data).unwrap();
         assert_eq!(cpt.name("key").unwrap().as_str(), "db");
         assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/odeg/.briefs");
+
+        let data = r#"db = "/Users/odeg/.briefs-001""#;
+        let cpt = pattern.captures(data).unwrap();
+        assert_eq!(cpt.name("key").unwrap().as_str(), "db");
+        assert_eq!(cpt.name("val").unwrap().as_str(), "/Users/odeg/.briefs-001");
     }
 }

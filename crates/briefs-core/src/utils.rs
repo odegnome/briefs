@@ -67,7 +67,7 @@ pub fn read_stream_from_disk(
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::path::PathBuf;
 
     use super::*;
@@ -79,7 +79,7 @@ mod tests {
     // Create default stream and config. Also, dirpath in briefsconfig
     // will certainly exist. The dirpath will be random, in order to allow
     // test cases to be run concurrently.
-    fn get_mocks() -> (Stream, BriefsConfig) {
+    pub fn get_mocks() -> (Stream, BriefsConfig) {
         let tmp_dir = std::env::temp_dir();
         let stream = Stream::default();
         let mut config = BriefsConfig::default();
@@ -108,7 +108,7 @@ mod tests {
         (stream, config)
     }
 
-    fn cleanup(dirpath: PathBuf) {
+    pub fn cleanup(dirpath: PathBuf) {
         assert!(dirpath.is_dir());
 
         std::fs::remove_dir_all(dirpath).unwrap();

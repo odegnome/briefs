@@ -354,8 +354,6 @@ pub mod test {
 
         assert!(path.exists(), "Db creation failed at expected path");
 
-        panic!("Check for tables & views");
-
         cleanup_db(path);
     }
 
