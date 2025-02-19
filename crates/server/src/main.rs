@@ -64,7 +64,7 @@ async fn main() {
         while let Some(StreamCommand { cmd, resp }) = rx.recv().await {
             match cmd {
                 Command::Create { title, msg } => {
-                    let new_post = post::Post::new(stream.size() as u32, title, msg);
+                    let new_post = post::Post::new(stream.nposts() as u32, title, msg);
                     if new_post.is_err() {
                         respond_with_bytes(
                             resp.unwrap(),
