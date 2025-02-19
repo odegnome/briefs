@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_save() {
-        let config = BriefsConfig::default();
+        let (_, config) = crate::utils::tests::get_mocks();
         config.save().unwrap();
 
         let saved_config = BriefsConfig::from_file(config.filepath.clone()).unwrap();

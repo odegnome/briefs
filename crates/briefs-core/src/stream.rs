@@ -35,14 +35,8 @@ impl Stream {
     pub fn assemble(conn: &mut Connection, last_updated: u64, doi: u64) -> anyhow::Result<Self> {
         println!("» Assembling existing stream");
         let records = db::query_cache(conn)?;
-        // !------- FIX
-        // Cache is returned from newer to older post,
-        // i.e. [0] will contain newest post but deque
-        // should not have newest post at the begin of
-        // the queue when converting into, due to obvious
-        // reason.
-        // -------!
-        let posts = VecDeque::from(db::sqlite_to_post(records)?);
+        let post_iter = db::sqlite_to_post(records)?.into_iter().rev();
+        let posts = VecDeque::from_iter(post_iter);
         let size = posts.len();
         println!("» Found {} sqlite rows", size);
         let result = db::query_post_count(conn)?.take("count");
@@ -51,7 +45,6 @@ impl Stream {
             sqlite::Value::Integer(val) => val.try_into()?,
             _ => return Err(BriefsError::custom_error("Post count not an integer".into()).into()),
         };
-        println!("» Queried #{} posts", size);
 
         Ok(Stream {
             posts,
@@ -167,7 +160,6 @@ impl Stream {
         } else {
             eid
         };
-        println!("» {sid} to {eid}");
         if self.id_in_cache(sid) {
             println!("» Fetching from cache");
             // use cache
