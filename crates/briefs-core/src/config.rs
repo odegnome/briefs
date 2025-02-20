@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     constant::{CONFIG_DIR, CONFIG_ENV, CONFIG_FILE},
-    BriefsError,
+    BriefsError, BriefsResult,
 };
 
 #[derive(Debug, Clone)]
@@ -48,7 +48,7 @@ impl Default for BriefsConfig {
 
 impl BriefsConfig {
     /// Sets `filepath` & `dirpath` from the given toml file.
-    pub fn set_filepath(&mut self, new_path: PathBuf) -> anyhow::Result<()> {
+    pub fn set_filepath(&mut self, new_path: PathBuf) -> BriefsResult<()> {
         self.dirpath = new_path
             .canonicalize()?
             .parent()
@@ -59,7 +59,7 @@ impl BriefsConfig {
     }
 
     /// Write the config to path
-    pub fn save(&self) -> anyhow::Result<()> {
+    pub fn save(&self) -> BriefsResult<()> {
         // • Make sure filepath exists
         std::fs::create_dir_all(self.dirpath.clone())?;
         // • Create config file
@@ -82,7 +82,7 @@ impl BriefsConfig {
 
     /// Read config from file. This should only be used when
     /// the config file has the required configurations.
-    pub fn from_file(file: PathBuf) -> anyhow::Result<Self> {
+    pub fn from_file(file: PathBuf) -> BriefsResult<Self> {
         let mut buf = String::new();
         let mut fptr = std::fs::File::open(file.clone())?;
         let _ = fptr.read_to_string(&mut buf)?;
@@ -134,7 +134,7 @@ impl BriefsConfig {
     }
 }
 
-pub fn fetch_config_from_env() -> anyhow::Result<PathBuf> {
+pub fn fetch_config_from_env() -> BriefsResult<PathBuf> {
     let result = std::env::var(CONFIG_ENV)?;
     let dirpath = PathBuf::try_from(result)?;
     if !dirpath.is_dir() {
@@ -151,7 +151,7 @@ pub fn fetch_config_from_env() -> anyhow::Result<PathBuf> {
     return Ok(filepath);
 }
 
-pub fn fallback_config_dir() -> anyhow::Result<PathBuf> {
+pub fn fallback_config_dir() -> BriefsResult<PathBuf> {
     let dirpath = home_dir()
         .ok_or_else(|| BriefsError::config_error("Home directory not found".into()))?
         .join(CONFIG_DIR);

@@ -1,4 +1,4 @@
-use crate::{constant::STREAM_CACHE_SIZE, post::Post, BriefsError};
+use crate::{constant::STREAM_CACHE_SIZE, post::Post, BriefsError, BriefsResult};
 use rand::{thread_rng, Rng};
 use sqlite::Connection;
 use std::{path::PathBuf, process};
@@ -15,11 +15,11 @@ pub trait DbInsertString {
     /// # Errors
     ///
     /// This function will return an error if .
-    fn db_insert_string(&self) -> anyhow::Result<String>;
+    fn db_insert_string(&self) -> BriefsResult<String>;
 }
 
 impl DbInsertString for Post {
-    fn db_insert_string(&self) -> anyhow::Result<String> {
+    fn db_insert_string(&self) -> BriefsResult<String> {
         // \"\" are needed, otherwise the insertion will fail.
         Ok(format!(
             "{},\"{}\",\"{}\",{},{}",
@@ -33,7 +33,7 @@ impl DbInsertString for Post {
     }
 }
 
-pub fn setup_tables(conn: &mut Connection) -> anyhow::Result<()> {
+pub fn setup_tables(conn: &mut Connection) -> BriefsResult<()> {
     let statement = format!(
         "
         CREATE TABLE IF NOT EXISTS {POSTS_TABLE} 
@@ -50,7 +50,7 @@ pub fn setup_tables(conn: &mut Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn setup_views(conn: &mut Connection) -> anyhow::Result<()> {
+pub fn setup_views(conn: &mut Connection) -> BriefsResult<()> {
     let statement = format!(
         "\
         CREATE VIEW IF NOT EXISTS {CACHE_VIEW} AS \
@@ -76,7 +76,7 @@ pub fn setup_views(conn: &mut Connection) -> anyhow::Result<()> {
 pub fn query_table_info(
     conn: &mut Connection,
     table_name: &str,
-) -> anyhow::Result<Vec<sqlite::Row>> {
+) -> BriefsResult<Vec<sqlite::Row>> {
     let statement = format!("PRAGMA table_info({table_name});");
 
     let mut stmt = conn.prepare(statement)?;
@@ -86,13 +86,13 @@ pub fn query_table_info(
     Ok(result)
 }
 
-pub fn create_db(path: PathBuf) -> anyhow::Result<Connection> {
+pub fn create_db(path: PathBuf) -> BriefsResult<Connection> {
     let conn = sqlite::open(path.as_path())?;
 
     Ok(conn)
 }
 
-pub fn insert_post(conn: &mut Connection, data: &Post) -> anyhow::Result<()> {
+pub fn insert_post(conn: &mut Connection, data: &Post) -> BriefsResult<()> {
     let value_string = data.db_insert_string()?;
     let statement = format!("INSERT INTO {} VALUES ({})", POSTS_TABLE, value_string);
 
@@ -101,7 +101,7 @@ pub fn insert_post(conn: &mut Connection, data: &Post) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn delete_post_by_id(conn: &mut Connection, post_id: u32) -> anyhow::Result<()> {
+pub fn delete_post_by_id(conn: &mut Connection, post_id: u32) -> BriefsResult<()> {
     let statement = format!("DELETE FROM {} WHERE id={}", POSTS_TABLE, post_id);
 
     conn.execute(statement)?;
@@ -113,7 +113,7 @@ pub fn update_post_title_by_id(
     conn: &mut Connection,
     post_id: u32,
     title: String,
-) -> anyhow::Result<()> {
+) -> BriefsResult<()> {
     let statement = format!(
         "UPDATE {} SET title = \"{}\" WHERE id={}",
         POSTS_TABLE, title, post_id
@@ -128,7 +128,7 @@ pub fn update_post_msg_by_id(
     conn: &mut Connection,
     post_id: u32,
     msg: String,
-) -> anyhow::Result<()> {
+) -> BriefsResult<()> {
     let statement = format!(
         "UPDATE {} SET msg = \"{}\" WHERE id={}",
         POSTS_TABLE, msg, post_id
@@ -142,7 +142,7 @@ pub fn update_post_msg_by_id(
 pub fn query_posts(
     conn: &mut Connection,
     posts_limit: Option<u32>,
-) -> anyhow::Result<Vec<sqlite::Row>> {
+) -> BriefsResult<Vec<sqlite::Row>> {
     let statement = format!(
         "SELECT * FROM {} LIMIT {};",
         POSTS_TABLE,
@@ -156,7 +156,7 @@ pub fn query_posts(
     Ok(result)
 }
 
-pub fn query_post_by_id(conn: &Connection, post_id: u32) -> anyhow::Result<sqlite::Row> {
+pub fn query_post_by_id(conn: &Connection, post_id: u32) -> BriefsResult<sqlite::Row> {
     let statement = format!("SELECT * FROM {} WHERE id={}", POSTS_TABLE, post_id);
 
     let mut stmt = conn.prepare(statement)?;
@@ -175,7 +175,7 @@ pub fn query_post_by_id(conn: &Connection, post_id: u32) -> anyhow::Result<sqlit
     Ok(result.remove(0))
 }
 
-pub fn query_post_count(conn: &Connection) -> anyhow::Result<sqlite::Row> {
+pub fn query_post_count(conn: &Connection) -> BriefsResult<sqlite::Row> {
     let statement = format!("SELECT count FROM {}", COUNT_VIEW);
 
     let mut stmt = conn.prepare(statement)?;
@@ -189,7 +189,7 @@ pub fn query_post_count(conn: &Connection) -> anyhow::Result<sqlite::Row> {
     Ok(result.remove(0))
 }
 
-pub fn query_cache(conn: &mut Connection) -> anyhow::Result<Vec<sqlite::Row>> {
+pub fn query_cache(conn: &mut Connection) -> BriefsResult<Vec<sqlite::Row>> {
     let statement = format!("SELECT * FROM {} ", CACHE_VIEW);
 
     let mut stmt = conn.prepare(statement)?;
@@ -199,7 +199,7 @@ pub fn query_cache(conn: &mut Connection) -> anyhow::Result<Vec<sqlite::Row>> {
     Ok(result)
 }
 
-pub fn query_last_n(conn: &mut Connection, n: u32) -> anyhow::Result<Vec<sqlite::Row>> {
+pub fn query_last_n(conn: &mut Connection, n: u32) -> BriefsResult<Vec<sqlite::Row>> {
     let statement = format!("SELECT * FROM {} ORDER BY id DESC LIMIT {}", POSTS_TABLE, n);
 
     let mut stmt = conn.prepare(statement)?;
@@ -209,7 +209,7 @@ pub fn query_last_n(conn: &mut Connection, n: u32) -> anyhow::Result<Vec<sqlite:
     Ok(result)
 }
 
-pub fn catchup(conn: &Connection, sid: u64, eid: u64, limit: u32) -> anyhow::Result<Vec<sqlite::Row>> {
+pub fn catchup(conn: &Connection, sid: u64, eid: u64, limit: u32) -> BriefsResult<Vec<sqlite::Row>> {
     let statement = format!(
         "SELECT * FROM {} WHERE id >= {} AND id <= {} LIMIT {}",
         POSTS_TABLE, sid, eid, limit
@@ -222,7 +222,7 @@ pub fn catchup(conn: &Connection, sid: u64, eid: u64, limit: u32) -> anyhow::Res
     Ok(result)
 }
 
-pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> anyhow::Result<Vec<Post>> {
+pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> BriefsResult<Vec<Post>> {
     let mut result = Vec::with_capacity(records.len());
     for row in records.into_iter() {
         let post = Post::parse_sqlite_row(row)?;
@@ -239,7 +239,7 @@ pub fn sqlite_to_post(records: Vec<sqlite::Row>) -> anyhow::Result<Vec<Post>> {
 /// # Panics
 ///
 /// Panics if sqlite3 is not installed.
-pub fn setup_db(path: Option<PathBuf>) -> anyhow::Result<()> {
+pub fn setup_db(path: Option<PathBuf>) -> BriefsResult<()> {
     // Check if sqlite3 is installed
     let sqlite3_check = process::Command::new("sqlite3")
         .arg("-version")

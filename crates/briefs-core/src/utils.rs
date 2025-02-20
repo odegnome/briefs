@@ -7,10 +7,10 @@ use crate::{
     config::BriefsConfig,
     constant::{DATA_DIR, DATA_FILE},
     stream::Stream,
-    BriefsError,
+    BriefsError, BriefsResult,
 };
 
-pub fn save_stream_on_disk(stream: &Stream, config: &BriefsConfig) -> anyhow::Result<()> {
+pub fn save_stream_on_disk(stream: &Stream, config: &BriefsConfig) -> BriefsResult<()> {
     let data_dir = config.dirpath.join(DATA_DIR);
     if !std::fs::exists(&data_dir)? {
         std::fs::create_dir_all(data_dir.clone())?;
@@ -31,7 +31,7 @@ pub fn save_stream_on_disk(stream: &Stream, config: &BriefsConfig) -> anyhow::Re
 pub fn read_stream_from_disk(
     conn: &mut Connection,
     config: &BriefsConfig,
-) -> anyhow::Result<Stream> {
+) -> BriefsResult<Stream> {
     let data_dir = config.dirpath.join(DATA_DIR);
     if !std::fs::exists(&data_dir)? {
         return Err(BriefsError::utils_error("Data directory does not exist".into()).into());
