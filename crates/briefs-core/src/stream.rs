@@ -32,7 +32,7 @@ impl Default for Stream {
 }
 
 impl Stream {
-    pub fn assemble(conn: &mut Connection, last_updated: u64, doi: u64) -> anyhow::Result<Self> {
+    pub fn assemble(conn: &mut Connection, last_updated: u64, doi: u64) -> BriefsResult<Self> {
         println!("» Assembling existing stream");
         let records = db::query_cache(conn)?;
         let post_iter = db::sqlite_to_post(records)?.into_iter().rev();
